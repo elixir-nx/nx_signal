@@ -1,0 +1,73 @@
+name: Test
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+jobs:
+  main:
+    name: Linux
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        elixir: ["1.13.0"]
+        otp: ["24.0"]
+    env:
+      MIX_ENV: test
+    steps:
+      - uses: actions/checkout@v2
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: ${{ matrix.otp }}
+          elixir-version: ${{ matrix.elixir }}
+      - name: Retrieve dependencies cache
+        uses: actions/cache@v1
+        id: mix-cache # id to use in retrieve action
+        with:
+          path: deps
+          key: v1-${{ matrix.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
+      - name: Install dependencies
+        if: ${{ steps.mix-cache.outputs.cache-hit != 'true' }}
+        run: mix deps.get
+      - name: Compile and check warnings
+        run: mix compile --warnings-as-errors
+      - name: Check formatting
+        run: mix format --check-formatted
+      - name: Run tests
+        run: mix test
+  win:
+    name: Windows
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        elixir: ["1.13.0"]
+        otp: ["24.0"]
+    env:
+      MIX_ENV: test
+    steps:
+      - name: Configure Git
+        run: git config --global core.autocrlf input
+        working-directory: .
+      - uses: actions/checkout@v2
+      - uses: ilammy/msvc-dev-cmd@v1
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: ${{ matrix.otp }}
+          elixir-version: ${{ matrix.elixir }}
+      - name: Retrieve dependencies cache
+        uses: actions/cache@v1
+        id: mix-cache # id to use in retrieve action
+        with:
+          path: deps
+          key: v1-${{ matrix.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
+      - name: Install dependencies
+        if: ${{ steps.mix-cache.outputs.cache-hit != 'true' }}
+        run: mix deps.get
+      - name: Compile and check warnings
+        run: mix compile --warnings-as-errors
+      - name: Check formatting
+        run: mix format --check-formatted
+      - name: Run tests
+        run: mix test
