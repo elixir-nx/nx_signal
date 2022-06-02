@@ -132,8 +132,6 @@ defmodule NxSignal.Windows do
   @doc """
   Blackman window
 
-  See also: `bartlett/1`
-
   ## Options
 
     * `:n` - The window length. Mandatory option.
@@ -207,6 +205,69 @@ defmodule NxSignal.Windows do
 
     if is_periodic do
       Nx.slice(window, [0], [Nx.size(window) - 1])
+    else
+      window
+    end
+  end
+
+  @doc """
+  Hamming window
+
+  ## Options
+
+    * `:n` - The window length. Mandatory option.
+    * `:is_periodic` - If `true`, produces a periodic window,
+       otherwise produces a symmetric window. Defaults to `true`
+    * `:type` - the output type for the window. Defaults to `{:f, 32}`
+    * `:name` - the axis name. Defaults to `nil`
+
+  ## Examples
+
+      iex> NxSignal.Windows.hamming(n: 5, is_periodic: true)
+      #Nx.Tensor<
+        f64[5]
+        [0.08000001311302185, 0.3978522167650548, 0.9121478645310932, 0.9121478172561361, 0.39785214027257043]
+      >
+      iex> NxSignal.Windows.hamming(n: 5, is_periodic: false)
+      #Nx.Tensor<
+        f64[5]
+        [0.08000001311302185, 0.5400000415649119, 1.0000000298023206, 0.5399999611359528, 0.0800000131130289]
+      >
+  """
+  defn hamming(opts \\ []) do
+    transform(opts, fn opts ->
+      opts = Keyword.validate!(opts, [:n, :name, is_periodic: true, type: {:f, 64}])
+
+      n = opts[:n]
+      name = opts[:name]
+      type = opts[:type]
+      is_periodic = opts[:is_periodic]
+
+      unless n do
+        raise "missing :n option"
+      end
+
+      hamming(n, name, type, is_periodic)
+    end)
+  end
+
+  defp hamming(l, name, type, is_periodic) do
+    import Nx.Defn.Kernel, only: [/: 2, *: 2, +: 2, -: 2]
+    import Kernel, except: [/: 2, *: 2, +: 2, -: 2]
+
+    l =
+      if is_periodic do
+        l + 1
+      else
+        l
+      end
+
+    n = Nx.iota({l}, names: [name], type: type)
+
+    window = 0.54 - 0.46 * Nx.cos(2 * :math.pi() * n / (l - 1))
+
+    if is_periodic do
+      Nx.slice(window, [0], [l - 1])
     else
       window
     end
