@@ -272,4 +272,67 @@ defmodule NxSignal.Windows do
       window
     end
   end
+
+  @doc """
+  Hann window
+
+  ## Options
+
+    * `:n` - The window length. Mandatory option.
+    * `:is_periodic` - If `true`, produces a periodic window,
+       otherwise produces a symmetric window. Defaults to `true`
+    * `:type` - the output type for the window. Defaults to `{:f, 32}`
+    * `:name` - the axis name. Defaults to `nil`
+
+  ## Examples
+
+      iex> NxSignal.Windows.hann(n: 5, is_periodic: false)
+      #Nx.Tensor<
+        f64[5]
+        [0.0, 0.500000021855695, 0.9999999999999981, 0.499999934432915, 7.66053886991358e-15]
+      >
+      iex> NxSignal.Windows.hann(n: 5, is_periodic: true)
+      #Nx.Tensor<
+        f64[5]
+        [0.0, 0.3454915194413273, 0.9045085177418011, 0.904508466355979, 0.34549143629732415]
+      >
+  """
+  defn hann(opts \\ []) do
+    transform(opts, fn opts ->
+      opts = Keyword.validate!(opts, [:n, :name, is_periodic: true, type: {:f, 64}])
+
+      n = opts[:n]
+      name = opts[:name]
+      type = opts[:type]
+      is_periodic = opts[:is_periodic]
+
+      unless n do
+        raise "missing :n option"
+      end
+
+      hann(n, name, type, is_periodic)
+    end)
+  end
+
+  defp hann(l, name, type, is_periodic) do
+    import Nx.Defn.Kernel, only: [/: 2, *: 2, +: 2, -: 2]
+    import Kernel, except: [/: 2, *: 2, +: 2, -: 2]
+
+    l =
+      if is_periodic do
+        l + 1
+      else
+        l
+      end
+
+    n = Nx.iota({l}, names: [name], type: type)
+
+    window = 0.5 * (1 - Nx.cos(2 * :math.pi() * n / (l - 1)))
+
+    if is_periodic do
+      Nx.slice(window, [0], [l - 1])
+    else
+      window
+    end
+  end
 end
