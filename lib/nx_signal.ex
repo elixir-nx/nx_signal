@@ -23,25 +23,25 @@ defmodule NxSignal do
 
   ## Examples
 
-    iex> {z, t, f} = NxSignal.stft(Nx.iota({4}), window: NxSignal.Windows.rectangular(n: 2), overlap_size: 1, nfft: 2, fs: 400)
-    iex> z
-    #Nx.Tensor<
-      c64[frequencies: 2][frames: 3]
-      [
-        [1.0+0.0i, 3.0+0.0i, 5.0+0.0i],
-        [-1.0+0.0i, -1.0+0.0i, -1.0+0.0i]
-      ]
-    >
-    iex> t
-    #Nx.Tensor<
-      f32[frames: 3]
-      [0.0024999999441206455, 0.004999999888241291, 0.007499999832361937]
-    >
-    iex> f
-    #Nx.Tensor<
-      f64[frequencies: 2]
-      [0.0, 200.0]
-    >
+      iex> {z, t, f} = NxSignal.stft(Nx.iota({4}), window: NxSignal.Windows.rectangular(n: 2), overlap_size: 1, nfft: 2, fs: 400)
+      iex> z
+      #Nx.Tensor<
+        c64[frequencies: 2][frames: 3]
+        [
+          [1.0+0.0i, 3.0+0.0i, 5.0+0.0i],
+          [-1.0+0.0i, -1.0+0.0i, -1.0+0.0i]
+        ]
+      >
+      iex> t
+      #Nx.Tensor<
+        f32[frames: 3]
+        [0.0024999999441206455, 0.004999999888241291, 0.007499999832361937]
+      >
+      iex> f
+      #Nx.Tensor<
+        f64[frequencies: 2]
+        [0.0, 200.0]
+      >
   """
   defn stft(data, opts \\ []) do
     {spectrum, frame_size, fs} =
