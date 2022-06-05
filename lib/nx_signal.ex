@@ -23,7 +23,7 @@ defmodule NxSignal do
 
   ## Examples
 
-      iex> {z, t, f} = NxSignal.stft(Nx.iota({4}), window: NxSignal.Windows.rectangular(n: 2), overlap_size: 1, nfft: 2, fs: 400)
+      iex> {z, t, f} = NxSignal.stft(Nx.iota({4}), NxSignal.Windows.rectangular(n: 2), overlap_size: 1, nfft: 2, fs: 400)
       iex> z
       #Nx.Tensor<
         c64[frequencies: 2][frames: 3]
@@ -43,9 +43,11 @@ defmodule NxSignal do
         [0.0, 200.0]
       >
   """
-  defn stft(data, opts \\ []) do
-    {spectrum, frame_size, fs} =
-      transform({data, opts}, fn {data, opts} ->
+  defn stft(data, window, opts \\ []) do
+    {frame_size} = Nx.shape(window)
+
+    {overlap_size, fs} =
+      transform({frame_size, opts}, fn {frame_size, opts} ->
         opts =
           Keyword.validate!(opts, [
             :overlap_size,
@@ -56,23 +58,17 @@ defmodule NxSignal do
 
         fs = opts[:fs] || raise ArgumentError, "missing fs option"
 
-        window = opts[:window] || raise "missing option :window"
-        {frame_size} = Nx.shape(window)
-
         overlap_size = opts[:overlap_size] || div(frame_size, 2)
 
-        frames =
-          for frame <- unfold_frames(data, frame_size, overlap_size) do
-            frame
-            |> Nx.multiply(window)
-            |> Nx.fft(length: opts[:nfft])
-            |> Nx.new_axis(1)
-          end
-
-        spectrum = Nx.concatenate(frames, axis: 1)
-
-        {Nx.reshape(spectrum, spectrum.shape, names: [:frequencies, :frames]), frame_size, fs}
+        {overlap_size, fs}
       end)
+
+    spectrum =
+      data
+      |> unfold_frames(frame_size, overlap_size)
+      |> Nx.multiply(window)
+      |> Nx.fft(length: opts[:nfft])
+      |> Nx.transpose()
 
     {num_frequencies, num_frames} = Nx.shape(spectrum)
 
@@ -82,26 +78,20 @@ defmodule NxSignal do
     # assign the middle of the equivalent time window as the time for the given frame
     times = (Nx.iota({num_frames}, names: [:frames]) + 1) * frame_size / (2 * fs)
 
-    {spectrum, times, frequencies}
+    {Nx.reshape(spectrum, spectrum.shape, names: [:frequencies, :frames]), times, frequencies}
   end
 
-  defp unfold_frames(data, frame_size, overlap_size) do
-    {backend, _} = Nx.default_backend()
+  defnp unfold_frames(data, frame_size, overlap_size) do
+    transform({data, frame_size, overlap_size}, fn {data, frame_size, overlap_size} ->
+      stride = frame_size - overlap_size
 
-    stride = frame_size - overlap_size
-
-    if backend == Torchx.Backend do
-      data
-      |> Torchx.from_nx()
-      |> Torchx.unfold(0, frame_size, stride)
-      |> Torchx.to_nx()
-      |> Nx.to_batched_list(1)
-    else
       {len} = Nx.shape(data)
 
-      for start <- 0..(len - frame_size)//stride do
-        Nx.slice(data, [start], [frame_size])
-      end
-    end
+      Nx.stack(
+        for start <- 0..(len - frame_size)//stride do
+          Nx.slice(data, [start], [frame_size])
+        end
+      )
+    end)
   end
 end
