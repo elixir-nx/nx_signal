@@ -6,6 +6,5 @@
   "kino_vega_lite": {:hex, :kino_vega_lite, "0.1.1", "29438b43a3fd3e0f1c8560ed9f943fe593b293e710fc091c63d65b272dd6255f", [:mix], [{:kino, "~> 0.6.1", [hex: :kino, repo: "hexpm", optional: false]}, {:table, "~> 0.1.0", [hex: :table, repo: "hexpm", optional: false]}, {:vega_lite, "~> 0.1.4", [hex: :vega_lite, repo: "hexpm", optional: false]}], "hexpm", "7058ffd10379b4b33a2bbca0b4a3bd6a124ef45136df01d3ccfd4f82ab368473"},
   "nx": {:git, "https://github.com/elixir-nx/nx.git", "98cb3f78b022cc3afd17f8013f1d273ca6f2eded", [branch: "main", sparse: "nx"]},
   "table": {:hex, :table, "0.1.1", "e8d3c75bb14b8dac227e17d85a626e695d96c271569e94e4a2d15494a7cb0b49", [:mix], [], "hexpm", "6a73280b2f5ad70474594feeb8c034ad490b97dbd5adaeb678f71c250cbc928c"},
-  "torchx": {:git, "https://github.com/elixir-nx/nx.git", "836ca4e12e8fc9b1bdc91d057b61a3fea7a7b9ad", [branch: "main", sparse: "torchx"]},
   "vega_lite": {:hex, :vega_lite, "0.1.4", "97f3f59f1a8b65169aa7dd861b0e13d10fb73e18b1f8546b953c34a74cab33ef", [:mix], [{:table, "~> 0.1.0", [hex: :table, repo: "hexpm", optional: false]}], "hexpm", "b9d0ec3e978b9d1b1a37024e218391f9c1d5a90b783ed2ed988bf5a9b2fddefb"},
 }

@@ -22,7 +22,6 @@ defmodule NxSignal.MixProject do
   defp deps do
     [
       {:nx, "~> 0.2", github: "elixir-nx/nx", branch: "main", sparse: "nx", override: true},
-      {:torchx, "~> 0.1", github: "elixir-nx/nx", branch: "main", sparse: "torchx"},
       {:vega_lite, "~> 0.1.4"},
       {:kino_vega_lite, "~> 0.1.1"}
     ]
