@@ -65,7 +65,7 @@ defmodule NxSignal do
 
     spectrum =
       data
-      |> as_windowed(window_dimensions: {frame_size}, strides: [frame_size - overlap_size])
+      |> as_windowed(window_size: frame_size, stride: frame_size - overlap_size)
       |> Nx.multiply(window)
       |> Nx.fft(length: opts[:nfft])
 
@@ -94,8 +94,8 @@ defmodule NxSignal do
   ## Examples
 
       iex> z = Nx.tensor([
-      ...>   [1, -1]
-      ...>   [3, -1]
+      ...>   [1, -1],
+      ...>   [3, -1],
       ...>   [5, -1]
       ...> ])
       iex> NxSignal.istft(z, NxSignal.Windows.rectangular(n: 2), overlap_size: 1, nfft: 2, fs: 400)
@@ -118,172 +118,110 @@ defmodule NxSignal do
   end
 
   @doc """
-  Returns a tensor with rank N+1 in which the last N dimensions
-  are sliding windows of rank N over the input tensor of rank N.
+  Returns a tensor of K windows of length N
 
   ## Options
 
-    * `:strides` - a list of length N which represents the strides
-      over each dimension. Can also be a number which will be the
-      stride over each dimension. Defaults to `1`.
+    * `:window_size` - the number of samples in a window
+    * `:stride` - The number of samples to skip between windows. Defaults to `1`.
     * `:padding` - A valid padding as per `Nx.Shape.pad/2` over the
       input tensor's shape. Defaults to `:valid`
 
   ## Examples
 
-      iex> NxSignal.as_windowed(Nx.tensor([[0, 1, 2, 3, 4], [10, 11, 12, 11, 10]]), window_dimensions: {2, 4})
+      iex> NxSignal.as_windowed(Nx.tensor([0, 1, 2, 3, 4, 10, 11, 12]), window_size: 4)
       #Nx.Tensor<
-        s64[2][2][4]
+        s64[5][4]
         [
-          [
-            [0, 1, 2, 3],
-            [10, 11, 12, 11]
-          ],
-          [
-            [1, 2, 3, 4],
-            [11, 12, 11, 10]
-          ]
+          [0, 1, 2, 3],
+          [1, 2, 3, 4],
+          [2, 3, 4, 10],
+          [3, 4, 10, 11],
+          [4, 10, 11, 12]
         ]
       >
 
-      iex> NxSignal.as_windowed(Nx.tensor([[0, 1, 2, 3, 4], [10, 11, 12, 11, 10]]), window_dimensions: {2, 3})
+      iex> NxSignal.as_windowed(Nx.tensor([0, 1, 2, 3, 4, 10, 11, 12]), window_size: 3)
       #Nx.Tensor<
-        s64[3][2][3]
+        s64[6][3]
         [
-          [
-            [0, 1, 2],
-            [10, 11, 12]
-          ],
-          [
-            [1, 2, 3],
-            [11, 12, 11]
-          ],
-          [
-            [2, 3, 4],
-            [12, 11, 10]
-          ]
+          [0, 1, 2],
+          [1, 2, 3],
+          [2, 3, 4],
+          [3, 4, 10],
+          [4, 10, 11],
+          [10, 11, 12]
         ]
       >
 
-      iex> t = Nx.tensor([
-      ...>  [0, 1, 2],
-      ...>  [3, 4, 5],
-      ...>  [-1, -2, -3],
-      ...>  [-4, -5, -6],
-      ...>  [-7, -8, -9]
-      ...> ])
-      iex> NxSignal.as_windowed(t, window_dimensions: {3, 2}, strides: [2, 1])
+      iex> NxSignal.as_windowed(Nx.tensor([0, 1, 2, 3, 4, 10, 11]), window_size: 2, stride: 2, padding: [{0, 3}])
       #Nx.Tensor<
-        s64[4][3][2]
+        s64[5][2]
         [
-          [
-            [0, 1],
-            [3, 4],
-            [-1, -2]
-          ],
-          [
-            [1, 2],
-            [4, 5],
-            [-2, -3]
-          ],
-          [
-            [-1, -2],
-            [-4, -5],
-            [-7, -8]
-          ],
-          [
-            [-2, -3],
-            [-5, -6],
-            [-8, -9]
-          ]
+          [0, 1],
+          [2, 3],
+          [4, 10],
+          [11, 0],
+          [0, 0]
         ]
       >
   """
   defn as_windowed(tensor, opts \\ []) do
-    {window_dimensions, window_min_source_shape, strides, padding, window_dimensions_list,
-     output_shape} =
+    # current implementation only supports windowing 1D tensors
+    {window_size, stride, padding, output_shape} =
       transform({Nx.shape(tensor), opts}, fn {shape, opts} ->
-        opts = Keyword.validate!(opts, [:window_dimensions, padding: :valid, strides: 1])
-        window_dimensions = opts[:window_dimensions]
+        opts = Keyword.validate!(opts, [:window_size, padding: :valid, stride: 1])
+        window_size = opts[:window_size]
+        window_dimensions = {window_size}
 
         padding = opts[:padding]
 
-        strides =
-          case opts[:strides] do
-            strides when Elixir.Kernel.is_list(strides) ->
-              strides
+        [stride] =
+          strides =
+          case opts[:stride] do
+            stride when Elixir.Kernel.is_list(stride) ->
+              stride
 
-            strides
+            stride
             when Elixir.Kernel.and(
-                   Elixir.Kernel.is_integer(strides),
-                   Elixir.Kernel.>=(strides, 1)
+                   Elixir.Kernel.is_integer(stride),
+                   Elixir.Kernel.>=(stride, 1)
                  ) ->
-              List.duplicate(strides, Nx.rank(tensor))
+              [stride]
 
-            strides ->
+            stride ->
               raise ArgumentError,
-                    "expected an integer >= 1 or a list of integers, got: #{inspect(strides)}"
+                    "expected an integer >= 1 or a list of integers, got: #{inspect(stride)}"
           end
 
         dilations = List.duplicate(1, Nx.rank(tensor))
 
-        {window_min_source_shape, _} =
+        {pooled_shape, padding_config} =
           Nx.Shape.pool(shape, window_dimensions, strides, padding, dilations)
 
-        window_dimensions_list = Tuple.to_list(window_dimensions)
+        output_shape = {Tuple.product(pooled_shape), window_size}
 
-        output_shape =
-          List.to_tuple([Tuple.product(window_min_source_shape) | window_dimensions_list])
-
-        {window_dimensions, window_min_source_shape, strides, padding, window_dimensions_list,
-         output_shape}
+        {window_size, stride, Enum.map(padding_config, fn {x, y} -> {x, y, 0} end), output_shape}
       end)
 
-    window_min_source = Nx.broadcast(1, window_min_source_shape)
+    output = Nx.broadcast(Nx.tensor(0, type: tensor.type), output_shape)
+    {num_windows, _} = Nx.shape(output)
 
-    t_iota = Nx.iota(tensor)
+    index_template =
+      Nx.concatenate([Nx.broadcast(0, {window_size, 1}), Nx.iota({window_size, 1})], axis: 1)
 
-    # Scatter the min index for each window.
-    # Since strides is always != 0, we don't
-    # have any overlapping scatters, which
-    # results in a tensor which marks the start
-    # of each window.
-    scattered_indices =
-      t_iota
-      |> Nx.window_scatter_min(window_min_source, 0, window_dimensions,
-        strides: strides,
-        padding: padding
-      )
-      |> then(&Nx.select(&1, t_iota, -1))
+    {output, _, _, _, _} =
+      while {output, i = 0, current_window = 0, t = Nx.pad(tensor, 0, padding), index_template},
+            current_window < num_windows do
+        indices = index_template + Nx.stack([current_window, 0])
+        updates = t |> Nx.slice([i], [window_size]) |> Nx.flatten()
 
-    {sliced_indices, template_indices} =
-      transform(
-        {t_iota, window_dimensions_list, scattered_indices, window_min_source_shape, strides},
-        &slice_indices/1
-      )
+        updated = Nx.indexed_add(output, indices, updates)
 
-    # Tile the sliced indices in way that
-    # each index will be the start of a 'row'
-    # of length Tuple.product(window_dimensions).
-    # This 'row' will be used to offset a template
-    # index tensor which indexes the first window.
-    # The offset indices represent each window in the
-    # flat tensor.
-    # These indices can be used in Nx.take(Nx.flatten(tensor), idx)
-    # Which we then need to reshape to obtain the correctly shaped windows
-    # in the last N dimensions.
-    idx =
-      sliced_indices
-      |> Nx.flatten()
-      |> Nx.new_axis(1)
-      |> Nx.tile([1, Nx.size(template_indices)])
-      |> Nx.add(template_indices)
-      |> Nx.reshape(output_shape)
+        {updated, i + stride, current_window + 1, t, index_template}
+      end
 
-    tensor
-    |> Nx.flatten()
-    |> Nx.take_along_axis(Nx.flatten(idx))
-    |> Nx.reshape(idx.shape)
+    output
   end
 
   defn overlap_and_add(tensor, opts \\ []) do
@@ -314,54 +252,5 @@ defmodule NxSignal do
       end
 
     result
-  end
-
-  defp slice_indices(
-         {t_iota, window_dimensions_list, scattered_indices, window_min_source_shape, strides}
-       ) do
-    # Since we can have windows which aren't touching,
-    # The can be "-1" gaps in the scattered_indices tensor
-    # above. For example:
-    # [
-    #   [0, 1, -1],
-    #   [-1, -1, -1],
-    #   [6, 7, -1],
-    #   [-1, -1, -1],
-    #   [-1, -1, -1]
-    # ]
-    # Because of this, we need to sort the tensor in all dimensions
-    # where the strides are bigger than 1. After sorting where needed,
-    # We need to slice the tensor to get all window starts in which we
-    # are interested.
-
-    zeros = List.duplicate(0, Nx.rank(scattered_indices))
-
-    sliced_indices =
-      for {stride, axis} <- Enum.with_index(strides), reduce: scattered_indices do
-        idx ->
-          len = elem(window_min_source_shape, axis)
-          lengths = idx.shape |> Tuple.to_list() |> List.replace_at(axis, len)
-
-          if stride > 1 do
-            sorted = Nx.sort(idx, axis: axis, direction: :asc)
-            starts = List.replace_at(zeros, axis, elem(idx.shape, axis) - len)
-
-            Nx.slice(sorted, starts, lengths)
-          else
-            # If we're not sorting, it means that the positions
-            # we're interested in are at the start.
-            # Therefore, the slicing needs to take place from the
-            # start of the tensor
-            Nx.slice(idx, zeros, lengths)
-          end
-      end
-
-    # Template indices which index the first window in the tensor
-    template_indices =
-      t_iota
-      |> Nx.slice(List.duplicate(0, Nx.rank(t_iota)), window_dimensions_list)
-      |> Nx.flatten()
-
-    {sliced_indices, template_indices}
   end
 end
