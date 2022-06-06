@@ -21,9 +21,7 @@ defmodule NxSignal.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:nx, "~> 0.2", github: "elixir-nx/nx", branch: "main", sparse: "nx", override: true},
-      {:vega_lite, "~> 0.1.4"},
-      {:kino_vega_lite, "~> 0.1.1"}
+      {:nx, "~> 0.2", github: "elixir-nx/nx", branch: "main", sparse: "nx", override: true}
     ]
   end
 end

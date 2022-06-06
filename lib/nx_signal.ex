@@ -17,7 +17,6 @@ defmodule NxSignal do
 
     * `:fs` - the sampling frequency for the input in Hz. Defaults to `1000`.
     * `:nfft` - the DFT length that will be passed to `Nx.fft/2`. Defaults to `:power_of_two`.
-    * `window` - the window tensor that will be applied to each frame before the DFT.
     * `overlap_size` - the number of samples for the overlap between frames.
     Defaults to `div(frame_size, 2)`.
 
@@ -26,10 +25,11 @@ defmodule NxSignal do
       iex> {z, t, f} = NxSignal.stft(Nx.iota({4}), NxSignal.Windows.rectangular(n: 2), overlap_size: 1, nfft: 2, fs: 400)
       iex> z
       #Nx.Tensor<
-        c64[frequencies: 2][frames: 3]
+        c64[frames: 3][frequencies: 2]
         [
-          [1.0+0.0i, 3.0+0.0i, 5.0+0.0i],
-          [-1.0+0.0i, -1.0+0.0i, -1.0+0.0i]
+          [1.0+0.0i, -1.0+0.0i],
+          [3.0+0.0i, -1.0+0.0i],
+          [5.0+0.0i, -1.0+0.0i]
         ]
       >
       iex> t
@@ -68,9 +68,8 @@ defmodule NxSignal do
       |> as_windowed(window_dimensions: {frame_size}, strides: [frame_size - overlap_size])
       |> Nx.multiply(window)
       |> Nx.fft(length: opts[:nfft])
-      |> Nx.transpose()
 
-    {num_frequencies, num_frames} = Nx.shape(spectrum)
+    {num_frames, num_frequencies} = Nx.shape(spectrum)
 
     frequencies =
       Nx.iota({num_frequencies}, type: {:f, 64}, names: [:frequencies]) * fs / num_frequencies
@@ -78,7 +77,7 @@ defmodule NxSignal do
     # assign the middle of the equivalent time window as the time for the given frame
     times = (Nx.iota({num_frames}, names: [:frames]) + 1) * frame_size / (2 * fs)
 
-    {Nx.reshape(spectrum, spectrum.shape, names: [:frequencies, :frames]), times, frequencies}
+    {Nx.reshape(spectrum, spectrum.shape, names: [:frames, :frequencies]), times, frequencies}
   end
 
   @doc """
