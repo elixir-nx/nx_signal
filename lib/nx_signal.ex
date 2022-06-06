@@ -11,7 +11,7 @@ defmodule NxSignal do
   Returns the complex spectrum Z, the time in seconds for
   each frame and the frequency bins in Hz.
 
-  See also: `NxSignal.Windows`
+  See also: `NxSignal.Windows`, `Nx.Signal.istft`
 
   ## Options
 
@@ -78,6 +78,43 @@ defmodule NxSignal do
     times = (Nx.iota({num_frames}, names: [:frames]) + 1) * frame_size / (2 * fs)
 
     {Nx.reshape(spectrum, spectrum.shape, names: [:frames, :frequencies]), times, frequencies}
+  end
+
+  @doc """
+  Computes the Inverse Short-Time Fourier Transform of a tensor.
+
+  Returns a tensor of M time-domain frames of length `nfft`.
+
+  See also: `NxSignal.Windows`, `Nx.Signal.stft`
+
+  ## Options
+
+    * `:nfft` - the DFT length that will be passed to `Nx.fft/2`. Defaults to `:power_of_two`.
+
+  ## Examples
+
+      iex> z = Nx.tensor([
+      ...>   [1, -1]
+      ...>   [3, -1]
+      ...>   [5, -1]
+      ...> ])
+      iex> NxSignal.istft(z, NxSignal.Windows.rectangular(n: 2), overlap_size: 1, nfft: 2, fs: 400)
+      #Nx.Tensor<
+        c64[frames: 3][samples: 2]
+        [
+          [0.0+0.0i, 1.0+0.0i],
+          [1.0+0.0i, 2.0+0.0i],
+          [2.0+0.0i, 3.0+0.0i]
+        ]
+      >
+  """
+  defn istft(data, window, opts \\ []) do
+    frames =
+      data
+      |> Nx.ifft(length: opts[:nfft])
+      |> Nx.multiply(window)
+
+    Nx.reshape(frames, frames.shape, names: [:frames, :samples])
   end
 
   @doc """
@@ -247,6 +284,36 @@ defmodule NxSignal do
     |> Nx.flatten()
     |> Nx.take_along_axis(Nx.flatten(idx))
     |> Nx.reshape(idx.shape)
+  end
+
+  defn overlap_and_add(tensor, opts \\ []) do
+    # pad the tensor to recover the edges
+    padded = Nx.pad(tensor, 0, [{1, 1, 0}, {0, 0, 0}])
+
+    {num_frames, output_shape, index_template_shape, hop_size} =
+      transform({opts, padded}, fn {opts, padded} ->
+        {num_frames, num_samples} = Nx.shape(padded)
+        hop_size = num_samples - opts[:overlap_size]
+
+        # TO-DO: this can probably be calculated dinamically
+        output_shape = {opts[:n]}
+
+        index_template_shape = {num_samples, 1}
+
+        {num_frames - 2, output_shape, index_template_shape, hop_size}
+      end)
+
+    zeros = Nx.broadcast(Nx.tensor(0, type: Nx.type(padded)), output_shape)
+
+    {result, _, _, _, _} =
+      while {x = zeros, update_offset = 0, frame_offset = 0,
+             index_template = Nx.iota(index_template_shape), tensor},
+            frame_offset < num_frames do
+        updated = Nx.indexed_add(x, index_template + update_offset, tensor[frame_offset])
+        {updated, update_offset + hop_size, frame_offset + 1, index_template, tensor}
+      end
+
+    result
   end
 
   defp slice_indices(
