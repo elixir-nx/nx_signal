@@ -17,7 +17,7 @@ defmodule NxSignal do
 
     * `:fs` - the sampling frequency for the input in Hz. Defaults to `1000`.
     * `:nfft` - the DFT length that will be passed to `Nx.fft/2`. Defaults to `:power_of_two`.
-    * `overlap_size` - the number of samples for the overlap between frames.
+    * `:overlap_size` - the number of samples for the overlap between frames.
     Defaults to `div(frame_size, 2)`.
 
   ## Examples
@@ -224,33 +224,77 @@ defmodule NxSignal do
     output
   end
 
+  @doc """
+  Performs the overlap-and-add algorithm over
+  an M by N tensor, where M is the number of
+  windows and N is the window size.
+
+  The tensor is zero-padded on the right so
+  the last window fully appears in the result.
+
+  ## Options
+
+    * `:overlap_size` - The number of overlapping samples between windows
+
+  ## Examples
+
+      iex> NxSignal.overlap_and_add(Nx.iota({3, 4}), overlap_size: 0)
+      #Nx.Tensor<
+        s64[12]
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+      >
+
+      iex> NxSignal.overlap_and_add(Nx.iota({3, 4}), overlap_size: 3)
+      #Nx.Tensor<
+        s64[6]
+        [0, 5, 15, 18, 17, 11]
+      >
+
+  """
   defn overlap_and_add(tensor, opts \\ []) do
-    # pad the tensor to recover the edges
-    padded = Nx.pad(tensor, 0, [{1, 1, 0}, {0, 0, 0}])
+    {stride, num_windows, window_size, output_holder_shape} =
+      transform({tensor, opts}, fn {tensor, opts} ->
+        import Nx.Defn.Kernel, only: []
+        import Elixir.Kernel
 
-    {num_frames, output_shape, index_template_shape, hop_size} =
-      transform({opts, padded}, fn {opts, padded} ->
-        {num_frames, num_samples} = Nx.shape(padded)
-        hop_size = num_samples - opts[:overlap_size]
+        {num_windows, window_size} = Nx.shape(tensor)
+        overlap_size = opts[:overlap_size]
 
-        # TO-DO: this can probably be calculated dinamically
-        output_shape = {opts[:n]}
+        unless is_number(overlap_size) and overlap_size < window_size do
+          raise ArgumentError,
+                "overlap_size must be a number less than the window size #{window_size}, got: #{inspect(window_size)}"
+        end
 
-        index_template_shape = {num_samples, 1}
+        stride = window_size - overlap_size
 
-        {num_frames - 2, output_shape, index_template_shape, hop_size}
+        output_holder_shape = {num_windows * stride + overlap_size}
+
+        {stride, num_windows, window_size, output_holder_shape}
       end)
 
-    zeros = Nx.broadcast(Nx.tensor(0, type: Nx.type(padded)), output_shape)
+    {output, _, _, _, _, _} =
+      while {
+              out = Nx.broadcast(0, output_holder_shape),
+              tensor,
+              i = 0,
+              idx_template = Nx.iota({window_size, 1}),
+              stride,
+              num_windows
+            },
+            i < num_windows do
+        current_window = tensor[i]
+        idx = idx_template + i * stride
 
-    {result, _, _, _, _} =
-      while {x = zeros, update_offset = 0, frame_offset = 0,
-             index_template = Nx.iota(index_template_shape), tensor},
-            frame_offset < num_frames do
-        updated = Nx.indexed_add(x, index_template + update_offset, tensor[frame_offset])
-        {updated, update_offset + hop_size, frame_offset + 1, index_template, tensor}
+        {
+          Nx.indexed_add(out, idx, current_window),
+          tensor,
+          i + 1,
+          idx_template,
+          stride,
+          num_windows
+        }
       end
 
-    result
+    output
   end
 end
