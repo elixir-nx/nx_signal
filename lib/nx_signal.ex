@@ -238,16 +238,42 @@ defmodule NxSignal do
 
   ## Examples
 
-      iex>
+      iex> NxSignal.overlap_and_add(Nx.iota({3, 4}), overlap_size: 0)
+      #Nx.Tensor<
+        s64[12]
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+      >
+
+      iex> NxSignal.overlap_and_add(Nx.iota({3, 4}), overlap_size: 3)
+      #Nx.Tensor<
+        s64[6]
+        [0, 5, 15, 18, 17, 11]
+      >
+
+      iex> NxSignal.overlap_and_add(Nx.iota({3, 4}), overlap_size: -3)
+      #Nx.Tensor<
+        s64[18]
+        [0, 1, 2, 3, 0, 0, 0, 4, 5, 6, 7, 0, 0, 0, 8, 9, 10, 11]
+      >
 
   """
   defn overlap_and_add(tensor, opts \\ []) do
     {stride, num_windows, window_size, output_holder_shape} =
       transform({tensor, opts}, fn {tensor, opts} ->
-        {num_windows, window_size} = Nx.shape(tensor)
-        stride = window_size - opts[:overlap_size]
+        import Nx.Defn.Kernel, only: []
+        import Elixir.Kernel
 
-        output_holder_shape = {num_windows * stride + stride}
+        {num_windows, window_size} = Nx.shape(tensor)
+        overlap_size = opts[:overlap_size]
+
+        unless is_number(overlap_size) and overlap_size < window_size do
+          raise ArgumentError,
+                "overlap_size must be a number greater than 0 and less than the window size #{window_size}, got: #{inspect(window_size)}"
+        end
+
+        stride = window_size - overlap_size
+
+        output_holder_shape = {num_windows * stride + overlap_size}
 
         {stride, num_windows, window_size, output_holder_shape}
       end)
