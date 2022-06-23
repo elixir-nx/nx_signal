@@ -40,7 +40,8 @@ different backends.
 
 ## Contributing
 
-Pull requests are welcome!
+Contributions are more than welcome!
+
 
 Firstly, please make sure you check the issues tracker and the pull requests list for
 a similar feature or bugfix to what you wish to contribute.
