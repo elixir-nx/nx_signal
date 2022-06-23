@@ -42,6 +42,7 @@ different backends.
 
 Contributions are more than welcome!
 
+
 Firstly, please make sure you check the issues tracker and the pull requests list for
 a similar feature or bugfix to what you wish to contribute.
 If there aren't any mentions to be found, open up an issue so that we can discuss the
