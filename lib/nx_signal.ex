@@ -72,12 +72,22 @@ defmodule NxSignal do
     {num_frames, num_frequencies} = Nx.shape(spectrum)
 
     frequencies =
-      Nx.iota({num_frequencies}, type: {:f, 64}, names: [:frequencies]) * fs / num_frequencies
+      stft_frequencies(
+        fs: fs,
+        num_frequencies: num_frequencies
+      )
 
     # assign the middle of the equivalent time window as the time for the given frame
     times = (Nx.iota({num_frames}, names: [:frames]) + 1) * frame_size / (2 * fs)
 
     {Nx.reshape(spectrum, spectrum.shape, names: [:frames, :frequencies]), times, frequencies}
+  end
+
+  defnp stft_frequencies(opts \\ []) do
+    opts = keyword!(opts, [:num_frequencies, :fs, type: {:f, 32}, names: [:frequencies]])
+
+    Nx.iota({opts[:num_frequencies]}, type: opts[:type], names: opts[:names]) * opts[:fs] /
+      opts[:num_frequencies]
   end
 
   @doc """
@@ -296,5 +306,70 @@ defmodule NxSignal do
       end
 
     output
+  end
+
+  @doc """
+  Generates MEL-scale weights
+
+  See also: `stft/3`
+  """
+  defn mel_filters(opts \\ []) do
+    opts = keyword!(opts, [:fs, :nfft, n_mels: 128, type: {:f, 32}])
+    n_mels = opts[:n_mels]
+    nfft = opts[:nfft]
+    fs = opts[:fs]
+    type = opts[:type]
+
+    fftfreqs = stft_frequencies(fs: fs, type: type, num_frequencies: nfft)
+
+    # magic numbers :p
+    min_mel = 0
+    max_mel = 45.245640471924965
+
+    mels = linspace(min_mel, max_mel, n: n_mels)
+    f_min = 0
+    f_sp = 200 / 3
+    freqs = f_min + f_sp * mels
+
+    min_log_hz = 1_000
+    min_log_mel = (min_log_hz - f_min) / f_sp
+
+    logstep = Nx.log(6.4) / 27
+
+    log_t = mels >= min_log_mel
+
+    # This is the same as freqs[log_t] = min_log_hz * Nx.exp(logstep * (mels[log_t] - min_log_mel))
+    # notice that since freqs and mels are indexed by the same conditional tensor, we don't
+    # need to slice either of them
+    freqs = Nx.select(log_t, min_log_hz * Nx.exp(logstep * (mels - min_log_mel)), freqs)
+
+    mel_f = freqs
+
+    fdiff = mel_f[1..-1//1] - mel_f[0..-2//1]
+    ramps = Nx.new_axis(mel_f, 1) - fftfreqs
+
+    lower = -ramps[0..(n_mels - 1)] / fdiff[0..(n_mels - 1)]
+    upper = ramps[2..(n_mels + 1)//1] / fdiff[1..n_mels]
+    weights = Nx.max(0, Nx.min(lower, upper))
+
+    enorm = 2.0 / (mel_f[2..(n_mels + 1)] - mel_f[0..(n_mels - 1)])
+    weights * Nx.new_axis(enorm, 1)
+  end
+
+  defn stft_to_mel(z, opts \\ []) do
+    magnitudes = Nx.abs(z) ** 2
+    filters = mel_filters(opts)
+
+    mel_spec = Nx.dot(filters, magnitudes)
+    log_spec = Nx.log(Nx.max(mel_spec, 1.0e-10)) / Nx.log(10)
+    log_spec = Nx.max(log_spec, Nx.reduce_max(log_spec) - 8)
+    (log_spec + 4) / 4
+  end
+
+  defnp linspace(min, max, opts \\ []) do
+    [n: n] = keyword!(opts, [:n])
+
+    step = (max - min) / n
+    min + Nx.iota({n}) * step
   end
 end
