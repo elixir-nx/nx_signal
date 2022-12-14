@@ -4,6 +4,8 @@ defmodule NxSignal.Windows do
   """
   import Nx.Defn
 
+  @pi :math.pi()
+
   @doc """
   Rectangular window
 
@@ -13,17 +15,7 @@ defmodule NxSignal.Windows do
   Also accepts the same options as `Nx.broadcast`.
   """
   defn rectangular(opts \\ []) do
-    {n, opts} =
-      transform(opts, fn opts ->
-        {n, opts} = Keyword.pop(opts, :n)
-
-        unless n do
-          raise "missing :n option"
-        end
-
-        {n, opts}
-      end)
-
+    {n, opts} = pop_window_size(opts)
     Nx.broadcast(1, {n}, opts)
   end
 
@@ -42,35 +34,24 @@ defmodule NxSignal.Windows do
 
       iex> NxSignal.Windows.bartlett(n: 3)
       #Nx.Tensor<
-        f64[3]
+        f32[3]
         [0.0, 0.6666666865348816, 0.6666666269302368]
       >
   """
   defn bartlett(opts \\ []) do
-    transform(opts, fn opts ->
-      opts = Keyword.validate!(opts, [:n, :name, type: {:f, 64}])
+    opts = keyword!(opts, [:n, :name, type: {:f, 32}])
+    {n, opts} = pop_window_size(opts)
+    name = opts[:name]
+    type = opts[:type]
 
-      n = opts[:n]
-      name = opts[:name]
-      type = opts[:type]
-
-      unless n do
-        raise "missing :n option"
-      end
-
-      bartlett(n, name, type)
-    end)
-  end
-
-  defp bartlett(n, name, type) do
     n_on_2 = div(n, 2)
     left_size = n_on_2 + rem(n, 2)
     left_idx = Nx.iota({left_size}, names: [name], type: type)
-    right_idx = {n_on_2} |> Nx.iota(names: [name], type: type) |> Nx.add(left_size)
+    right_idx = Nx.iota({n_on_2}, names: [name], type: type) + left_size
 
     Nx.concatenate([
-      Nx.multiply(left_idx, 2 / n),
-      Nx.subtract(2, Nx.multiply(right_idx, 2 / n))
+      left_idx * 2 / n,
+      2 - right_idx * 2 / n
     ])
   end
 
@@ -89,44 +70,35 @@ defmodule NxSignal.Windows do
 
       iex> NxSignal.Windows.triangular(n: 3)
       #Nx.Tensor<
-        f64[3]
+        f32[3]
         [0.5, 1.0, 0.5]
       >
   """
   defn triangular(opts \\ []) do
-    transform(opts, fn opts ->
-      opts = Keyword.validate!(opts, [:n, :name, type: {:f, 64}])
+    opts = keyword!(opts, [:n, :name, type: {:f, 32}])
+    {n, opts} = pop_window_size(opts)
+    name = opts[:name]
+    type = opts[:type]
 
-      n = opts[:n]
-      name = opts[:name]
-      type = opts[:type]
+    case rem(n, 2) do
+      1 ->
+        # odd case
+        n_on_2 = div(n + 1, 2)
 
-      unless n do
-        raise "missing :n option"
-      end
+        idx = Nx.iota({n_on_2}, names: [name], type: type) + 1
 
-      triangular(n, name, type)
-    end)
-  end
+        left = idx * 2 / (n + 1)
+        Nx.concatenate([left, left |> Nx.reverse() |> Nx.slice([1], [Nx.size(left) - 1])])
 
-  defp triangular(n, name, type) when rem(n, 2) == 1 do
-    # odd case
-    n_on_2 = div(n + 1, 2)
+      0 ->
+        # even case
+        n_on_2 = div(n + 1, 2)
 
-    idx = Nx.iota({n_on_2}, names: [name], type: type) |> Nx.add(1)
+        idx = Nx.iota({n_on_2}, names: [name], type: type) + 1
 
-    left = Nx.multiply(idx, 2 / (n + 1))
-    Nx.concatenate([left, left |> Nx.reverse() |> Nx.slice([1], [Nx.size(left) - 1])])
-  end
-
-  defp triangular(n, name, type) do
-    # even case
-    n_on_2 = div(n + 1, 2)
-
-    idx = Nx.iota({n_on_2}, names: [name], type: type) |> Nx.add(1)
-
-    left = Nx.multiply(idx, 2) |> Nx.subtract(1) |> Nx.divide(n)
-    Nx.concatenate([left, Nx.reverse(left)])
+        left = (2 * idx - 1) / n
+        Nx.concatenate([left, Nx.reverse(left)])
+    end
   end
 
   @doc """
@@ -144,14 +116,14 @@ defmodule NxSignal.Windows do
 
       iex> NxSignal.Windows.blackman(n: 5, is_periodic: false)
       #Nx.Tensor<
-        f64[5]
-        [-1.4901161193847656e-8, 0.34000001053081275, 0.9999999850988357, 0.34000001053081275, -1.4901161193847656e-8]
+        f32[5]
+        [-1.4901161193847656e-8, 0.3400000333786011, 0.9999999403953552, 0.3400000333786011, -1.4901161193847656e-8]
       >
 
       iex> NxSignal.Windows.blackman(n: 5, is_periodic: true)
       #Nx.Tensor<
-        f64[5]
-        [-1.4901161193847656e-8, 0.20077014493625245, 0.8492298742686417, 0.8492298742686417, 0.20077014493625245]
+        f32[5]
+        [-1.4901161193847656e-8, 0.20077012479305267, 0.8492299318313599, 0.8492299318313599, 0.20077012479305267]
       >
 
       iex> NxSignal.Windows.blackman(n: 6, is_periodic: true, type: {:f, 32})
@@ -161,25 +133,11 @@ defmodule NxSignal.Windows do
       >
   """
   defn blackman(opts \\ []) do
-    transform(opts, fn opts ->
-      opts = Keyword.validate!(opts, [:n, :name, is_periodic: true, type: {:f, 64}])
-
-      n = opts[:n]
-      name = opts[:name]
-      type = opts[:type]
-      is_periodic = opts[:is_periodic]
-
-      unless n do
-        raise "missing :n option"
-      end
-
-      blackman(n, name, type, is_periodic)
-    end)
-  end
-
-  defp blackman(l, name, type, is_periodic) do
-    import Nx.Defn.Kernel, only: [/: 2, *: 2, +: 2, -: 2]
-    import Kernel, except: [/: 2, *: 2, +: 2, -: 2]
+    opts = keyword!(opts, [:n, :name, is_periodic: true, type: {:f, 32}])
+    {l, opts} = pop_window_size(opts)
+    name = opts[:name]
+    type = opts[:type]
+    is_periodic = opts[:is_periodic]
 
     l =
       if is_periodic do
@@ -188,13 +146,13 @@ defmodule NxSignal.Windows do
         l
       end
 
-    m = ceil(l / 2)
+    m = div_ceil(l, 2)
 
     n = Nx.iota({m}, names: [name], type: type)
 
     left =
-      0.42 - 0.5 * Nx.cos(2 * :math.pi() * n / (l - 1)) +
-        0.08 * Nx.cos(4 * :math.pi() * n / (l - 1))
+      0.42 - 0.5 * Nx.cos(2 * @pi * n / (l - 1)) +
+        0.08 * Nx.cos(4 * @pi * n / (l - 1))
 
     window =
       if rem(l, 2) == 0 do
@@ -225,35 +183,21 @@ defmodule NxSignal.Windows do
 
       iex> NxSignal.Windows.hamming(n: 5, is_periodic: true)
       #Nx.Tensor<
-        f64[5]
-        [0.08000001311302185, 0.3978522167650548, 0.9121478645310932, 0.9121478172561361, 0.39785214027257043]
+        f32[5]
+        [0.08000001311302185, 0.39785221219062805, 0.9121478796005249, 0.9121478199958801, 0.3978521227836609]
       >
       iex> NxSignal.Windows.hamming(n: 5, is_periodic: false)
       #Nx.Tensor<
-        f64[5]
-        [0.08000001311302185, 0.5400000415649119, 1.0000000298023206, 0.5399999611359528, 0.0800000131130289]
+        f32[5]
+        [0.08000001311302185, 0.5400000214576721, 1.0, 0.5400000214576721, 0.08000001311302185]
       >
   """
   defn hamming(opts \\ []) do
-    transform(opts, fn opts ->
-      opts = Keyword.validate!(opts, [:n, :name, is_periodic: true, type: {:f, 64}])
-
-      n = opts[:n]
-      name = opts[:name]
-      type = opts[:type]
-      is_periodic = opts[:is_periodic]
-
-      unless n do
-        raise "missing :n option"
-      end
-
-      hamming(n, name, type, is_periodic)
-    end)
-  end
-
-  defp hamming(l, name, type, is_periodic) do
-    import Nx.Defn.Kernel, only: [/: 2, *: 2, +: 2, -: 2]
-    import Kernel, except: [/: 2, *: 2, +: 2, -: 2]
+    opts = keyword!(opts, [:n, :name, is_periodic: true, type: {:f, 32}])
+    {l, opts} = pop_window_size(opts)
+    name = opts[:name]
+    type = opts[:type]
+    is_periodic = opts[:is_periodic]
 
     l =
       if is_periodic do
@@ -264,7 +208,7 @@ defmodule NxSignal.Windows do
 
     n = Nx.iota({l}, names: [name], type: type)
 
-    window = 0.54 - 0.46 * Nx.cos(2 * :math.pi() * n / (l - 1))
+    window = 0.54 - 0.46 * Nx.cos(2 * @pi * n / (l - 1))
 
     if is_periodic do
       Nx.slice(window, [0], [l - 1])
@@ -288,35 +232,21 @@ defmodule NxSignal.Windows do
 
       iex> NxSignal.Windows.hann(n: 5, is_periodic: false)
       #Nx.Tensor<
-        f64[5]
-        [0.0, 0.500000021855695, 0.9999999999999981, 0.499999934432915, 7.66053886991358e-15]
+        f32[5]
+        [0.0, 0.5, 1.0, 0.5, 0.0]
       >
       iex> NxSignal.Windows.hann(n: 5, is_periodic: true)
       #Nx.Tensor<
-        f64[5]
-        [0.0, 0.3454915194413273, 0.9045085177418011, 0.904508466355979, 0.34549143629732415]
+        f32[5]
+        [0.0, 0.34549152851104736, 0.9045085310935974, 0.9045084714889526, 0.3454914391040802]
       >
   """
   defn hann(opts \\ []) do
-    transform(opts, fn opts ->
-      opts = Keyword.validate!(opts, [:n, :name, is_periodic: true, type: {:f, 64}])
-
-      n = opts[:n]
-      name = opts[:name]
-      type = opts[:type]
-      is_periodic = opts[:is_periodic]
-
-      unless n do
-        raise "missing :n option"
-      end
-
-      hann(n, name, type, is_periodic)
-    end)
-  end
-
-  defp hann(l, name, type, is_periodic) do
-    import Nx.Defn.Kernel, only: [/: 2, *: 2, +: 2, -: 2]
-    import Kernel, except: [/: 2, *: 2, +: 2, -: 2]
+    opts = keyword!(opts, [:n, :name, is_periodic: true, type: {:f, 32}])
+    {l, opts} = pop_window_size(opts)
+    name = opts[:name]
+    type = opts[:type]
+    is_periodic = opts[:is_periodic]
 
     l =
       if is_periodic do
@@ -327,12 +257,26 @@ defmodule NxSignal.Windows do
 
     n = Nx.iota({l}, names: [name], type: type)
 
-    window = 0.5 * (1 - Nx.cos(2 * :math.pi() * n / (l - 1)))
+    window = 0.5 * (1 - Nx.cos(2 * @pi * n / (l - 1)))
 
     if is_periodic do
       Nx.slice(window, [0], [l - 1])
     else
       window
     end
+  end
+
+  deftransformp pop_window_size(opts) do
+    {n, opts} = Keyword.pop(opts, :n)
+
+    unless n do
+      raise "missing :n option"
+    end
+
+    {n, opts}
+  end
+
+  deftransformp div_ceil(num, den) do
+    ceil(num / den)
   end
 end
