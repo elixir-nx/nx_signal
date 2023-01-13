@@ -19,6 +19,7 @@ defmodule NxSignal do
     * `:nfft` - the DFT length that will be passed to `Nx.fft/2`. Defaults to `:power_of_two`.
     * `:overlap_size` - the number of samples for the overlap between frames.
     Defaults to `div(frame_size, 2)`.
+    * `:window_padding` - `:reflect`, `:zeros` or `nil`. See `as_windowed/3` for more details.
 
   ## Examples
 
@@ -52,6 +53,7 @@ defmodule NxSignal do
           Keyword.validate!(opts, [
             :overlap_size,
             :window,
+            :window_padding,
             fs: 100,
             nfft: :power_of_two
           ])
@@ -65,7 +67,11 @@ defmodule NxSignal do
 
     spectrum =
       data
-      |> as_windowed(window_size: frame_size, stride: frame_size - overlap_size)
+      |> as_windowed(
+        padding: opts[:window_padding],
+        window_size: frame_size,
+        stride: frame_size - overlap_size
+      )
       |> Nx.multiply(window)
       |> Nx.fft(length: opts[:nfft])
 
@@ -134,8 +140,10 @@ defmodule NxSignal do
 
     * `:window_size` - the number of samples in a window
     * `:stride` - The number of samples to skip between windows. Defaults to `1`.
-    * `:padding` - A valid padding as per `Nx.Shape.pad/2` over the
-      input tensor's shape. Defaults to `:valid`
+    * `:padding` - A can be `:reflect` or a  valid padding as per `Nx.Shape.pad/2` over the
+      input tensor's shape. Defaults to `:valid`. If `:reflect` or `:zeros`, the first window will be centered
+      at the start of the signal. For `:reflect`, each incomplete window will be reflected as if it was
+      periodic (see examples for `as_windowed/2`). For `:zeros`, each incomplete window will be zero-padded.
 
   ## Examples
 
@@ -177,42 +185,58 @@ defmodule NxSignal do
       >
   """
   defn as_windowed(tensor, opts \\ []) do
+    case opts[:padding] do
+      :reflect ->
+        as_windowed_reflect_padding(tensor, opts)
+
+      _ ->
+        as_windowed_non_reflect_padding(tensor, opts)
+    end
+  end
+
+  deftransformp as_windowed_parse_opts(shape, opts, :reflect) do
+    window_size = opts[:window_size]
+    as_windowed_parse_opts(shape, Keyword.put(opts, :padding, [{div(window_size, 2), 0}]))
+  end
+
+  deftransformp as_windowed_parse_opts(shape, opts) do
+    opts = Keyword.validate!(opts, [:window_size, padding: :valid, stride: 1])
+    window_size = opts[:window_size]
+    window_dimensions = {window_size}
+
+    padding = opts[:padding]
+
+    [stride] =
+      strides =
+      case opts[:stride] do
+        stride when Elixir.Kernel.is_list(stride) ->
+          stride
+
+        stride
+        when Elixir.Kernel.and(
+               Elixir.Kernel.is_integer(stride),
+               Elixir.Kernel.>=(stride, 1)
+             ) ->
+          [stride]
+
+        stride ->
+          raise ArgumentError,
+                "expected an integer >= 1 or a list of integers, got: #{inspect(stride)}"
+      end
+
+    dilations = List.duplicate(1, Nx.rank(shape))
+
+    {pooled_shape, padding_config} =
+      Nx.Shape.pool(shape, window_dimensions, strides, padding, dilations)
+
+    output_shape = {Tuple.product(pooled_shape), window_size}
+
+    {window_size, stride, Enum.map(padding_config, fn {x, y} -> {x, y, 0} end), output_shape}
+  end
+
+  defnp as_windowed_non_reflect_padding(tensor, opts \\ []) do
     # current implementation only supports windowing 1D tensors
-    {window_size, stride, padding, output_shape} =
-      transform({Nx.shape(tensor), opts}, fn {shape, opts} ->
-        opts = Keyword.validate!(opts, [:window_size, padding: :valid, stride: 1])
-        window_size = opts[:window_size]
-        window_dimensions = {window_size}
-
-        padding = opts[:padding]
-
-        [stride] =
-          strides =
-          case opts[:stride] do
-            stride when Elixir.Kernel.is_list(stride) ->
-              stride
-
-            stride
-            when Elixir.Kernel.and(
-                   Elixir.Kernel.is_integer(stride),
-                   Elixir.Kernel.>=(stride, 1)
-                 ) ->
-              [stride]
-
-            stride ->
-              raise ArgumentError,
-                    "expected an integer >= 1 or a list of integers, got: #{inspect(stride)}"
-          end
-
-        dilations = List.duplicate(1, Nx.rank(tensor))
-
-        {pooled_shape, padding_config} =
-          Nx.Shape.pool(shape, window_dimensions, strides, padding, dilations)
-
-        output_shape = {Tuple.product(pooled_shape), window_size}
-
-        {window_size, stride, Enum.map(padding_config, fn {x, y} -> {x, y, 0} end), output_shape}
-      end)
+    {window_size, stride, padding, output_shape} = as_windowed_parse_opts(Nx.shape(tensor), opts)
 
     output = Nx.broadcast(Nx.tensor(0, type: tensor.type), output_shape)
     {num_windows, _} = Nx.shape(output)
@@ -232,6 +256,60 @@ defmodule NxSignal do
       end
 
     output
+  end
+
+  defnp as_windowed_reflect_padding(tensor, opts \\ []) do
+    # current implementation only supports windowing 1D tensors
+    {window_size, stride, _padding, output_shape} =
+      as_windowed_parse_opts(Nx.shape(tensor), opts, :reflect)
+
+    output = Nx.broadcast(Nx.tensor(0, type: tensor.type), output_shape)
+    {num_windows, _} = Nx.shape(output)
+
+    index_template =
+      Nx.concatenate([Nx.broadcast(0, {window_size, 1}), Nx.iota({window_size, 1})], axis: 1)
+
+    leading_window_indices = generate_leading_window_indices(window_size, stride)
+
+    {output, _, _, _, _} =
+      while {output, i = 0, current_window = 0, t = tensor, index_template},
+            current_window < num_windows do
+        # Here windows are centered at the current index
+
+        cond do
+          i < div(window_size, 2) ->
+            # We're indexing before we have a full window on the left
+
+            window = Nx.take(t, leading_window_indices[i])
+
+            indices = index_template + Nx.stack([current_window, 0])
+            updated = Nx.indexed_add(output, indices, window)
+
+            {updated, i + stride, current_window + 1, t, index_template}
+
+          true ->
+            # Case where we can index a full window
+            indices = index_template + Nx.stack([current_window, 0])
+            updates = t |> Nx.slice([i - div(window_size, 2)], [window_size]) |> Nx.flatten()
+
+            updated = Nx.indexed_add(output, indices, updates)
+
+            {updated, i + stride, current_window + 1, t, index_template}
+        end
+      end
+
+    output
+  end
+
+  deftransformp generate_leading_window_indices(window_size, stride) do
+    half_window = div(window_size, 2)
+
+    for offset <- 0..half_window//stride do
+      {offset + half_window}
+      |> Nx.iota()
+      |> pad_reflect(window_size)
+    end
+    |> Nx.stack()
   end
 
   @doc """
@@ -371,5 +449,36 @@ defmodule NxSignal do
 
     step = (max - min) / n
     min + Nx.iota({n}) * step
+  end
+
+  defn pad_reflect(window, target_size) do
+    case Nx.shape(window) do
+      {^target_size} ->
+        window
+
+      {n} ->
+        pad_length = target_size - n
+
+        period =
+          case pad_length do
+            1 ->
+              Nx.tensor([1])
+
+            2 ->
+              Nx.tensor([1, 2]) |> Nx.remainder(n)
+
+            _ ->
+              Nx.concatenate([
+                Nx.iota({n - 1})[1..-1//1],
+                (n - Nx.iota({n})) |> Nx.slice([1], [n - 1]),
+                Nx.tensor([0])
+              ])
+          end
+
+        idx = Nx.iota({pad_length}) |> Nx.remainder(2 * n - 2)
+        pad = window |> Nx.take(Nx.take(period, idx)) |> Nx.reverse()
+
+        Nx.concatenate([pad, window])
+    end
   end
 end
