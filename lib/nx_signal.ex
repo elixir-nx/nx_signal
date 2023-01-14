@@ -89,7 +89,7 @@ defmodule NxSignal do
     {Nx.reshape(spectrum, spectrum.shape, names: [:frames, :frequencies]), times, frequencies}
   end
 
-  defnp stft_frequencies(opts \\ []) do
+  defn stft_frequencies(opts \\ []) do
     opts = keyword!(opts, [:num_frequencies, :fs, type: {:f, 32}, names: [:frequencies]])
 
     Nx.iota({opts[:num_frequencies]}, type: opts[:type], names: opts[:names]) * opts[:fs] /
@@ -288,6 +288,7 @@ defmodule NxSignal do
       Nx.concatenate([Nx.broadcast(0, {window_size, 1}), Nx.iota({window_size, 1})], axis: 1)
 
     leading_window_indices = generate_leading_window_indices(window_size, stride)
+    half_window = div(window_size - 1, 2) + 1
 
     {output, _, _, _, _} =
       while {output, i = 0, current_window = 0, t = tensor, index_template},
@@ -295,7 +296,7 @@ defmodule NxSignal do
         # Here windows are centered at the current index
 
         cond do
-          i < div(window_size, 2) ->
+          i < half_window ->
             # We're indexing before we have a full window on the left
 
             window = Nx.take(t, leading_window_indices[i])
@@ -431,15 +432,16 @@ defmodule NxSignal do
     fs = opts[:fs]
     type = opts[:type]
 
-    fftfreqs = stft_frequencies(fs: fs, type: type, num_frequencies: nfft)
+    fftfreqs = stft_frequencies(fs: fs, type: type, num_frequencies: nfft)[0..(div(nfft, 2) - 1)]
 
     # magic numbers :p
     min_mel = 0
     max_mel = 45.245640471924965
 
-    mels = linspace(min_mel, max_mel, n: n_mels)
+    mels = linspace(min_mel, max_mel, n: n_mels + 2)
+
     f_min = 0
-    f_sp = 200 / 3
+    f_sp = 200.0 / 3
     freqs = f_min + f_sp * mels
 
     min_log_hz = 1_000
@@ -447,7 +449,7 @@ defmodule NxSignal do
 
     logstep = Nx.log(6.4) / 27
 
-    log_t = mels >= min_log_mel
+    log_t = print_value(mels >= min_log_mel)
 
     # This is the same as freqs[log_t] = min_log_hz * Nx.exp(logstep * (mels[log_t] - min_log_mel))
     # notice that since freqs and mels are indexed by the same conditional tensor, we don't
@@ -456,17 +458,14 @@ defmodule NxSignal do
 
     mel_f = freqs
 
-    fdiff =
-      Nx.concatenate([Nx.take(mel_f, Nx.tensor([0])), mel_f[1..-1//1] - mel_f[0..-2//1]])
-      |> Nx.new_axis(1)
-
+    fdiff = Nx.new_axis(mel_f[1..-1//1] - mel_f[0..-2//1], 1)
     ramps = Nx.new_axis(mel_f, 1) - fftfreqs
 
-    lower = -ramps[0..(n_mels - 2)] / fdiff[0..(n_mels - 2)]
-    upper = ramps[1..(n_mels - 1)] / fdiff[1..(n_mels - 1)]
+    lower = -ramps[0..(n_mels - 1)] / fdiff[0..(n_mels - 1)]
+    upper = ramps[2..(n_mels + 1)//1] / fdiff[1..n_mels]
     weights = Nx.max(0, Nx.min(lower, upper))
 
-    enorm = 2.0 / (mel_f[1..(n_mels - 1)] - mel_f[0..(n_mels - 2)] + 1.0e-9)
+    enorm = 2.0 / (mel_f[2..(n_mels + 1)] - mel_f[0..(n_mels - 1)])
 
     weights * Nx.new_axis(enorm, 1)
   end
@@ -475,8 +474,20 @@ defmodule NxSignal do
     magnitudes = Nx.abs(z) ** 2
     filters = mel_filters(opts)
 
-    mel_spec = Nx.dot(filters, [1], magnitudes, [1])
-    log_spec = Nx.log(Nx.max(mel_spec, 1.0e-10)) / Nx.log(10)
+    freq_size = Nx.axis_size(filters, :frequencies)
+
+    real_frequencies_mag = Nx.slice_along_axis(magnitudes, 0, freq_size, axis: :frequencies)
+
+    mel_spec =
+      Nx.dot(
+        filters,
+        [:frequencies],
+        real_frequencies_mag,
+        [:frequencies]
+      )
+      |> print_value()
+
+    log_spec = Nx.log(Nx.clip(mel_spec, 1.0e-10, :infinity)) / Nx.log(10)
     log_spec = Nx.max(log_spec, Nx.reduce_max(log_spec) - 8)
     (log_spec + 4) / 4
   end
