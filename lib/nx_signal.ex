@@ -475,7 +475,7 @@ defmodule NxSignal do
     magnitudes = Nx.abs(z) ** 2
     filters = mel_filters(opts)
 
-    mel_spec = Nx.dot(filters, magnitudes)
+    mel_spec = Nx.dot(filters, [1], magnitudes, [1])
     log_spec = Nx.log(Nx.max(mel_spec, 1.0e-10)) / Nx.log(10)
     log_spec = Nx.max(log_spec, Nx.reduce_max(log_spec) - 8)
     (log_spec + 4) / 4
