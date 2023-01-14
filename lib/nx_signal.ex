@@ -456,14 +456,18 @@ defmodule NxSignal do
 
     mel_f = freqs
 
-    fdiff = mel_f[1..-1//1] - mel_f[0..-2//1]
+    fdiff =
+      Nx.concatenate([Nx.take(mel_f, Nx.tensor([0])), mel_f[1..-1//1] - mel_f[0..-2//1]])
+      |> Nx.new_axis(1)
+
     ramps = Nx.new_axis(mel_f, 1) - fftfreqs
 
-    lower = -ramps[0..(n_mels - 1)] / fdiff[0..(n_mels - 1)]
-    upper = ramps[2..(n_mels + 1)//1] / fdiff[1..n_mels]
+    lower = -ramps[0..(n_mels - 2)] / fdiff[0..(n_mels - 2)]
+    upper = ramps[1..(n_mels - 1)] / fdiff[1..(n_mels - 1)]
     weights = Nx.max(0, Nx.min(lower, upper))
 
-    enorm = 2.0 / (mel_f[2..(n_mels + 1)] - mel_f[0..(n_mels - 1)])
+    enorm = 2.0 / (mel_f[1..(n_mels - 1)] - mel_f[0..(n_mels - 2)] + 1.0e-9)
+
     weights * Nx.new_axis(enorm, 1)
   end
 
