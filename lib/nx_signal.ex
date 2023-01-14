@@ -40,20 +40,20 @@ defmodule NxSignal do
       >
       iex> f
       #Nx.Tensor<
-        f64[frequencies: 2]
+        f32[frequencies: 2]
         [0.0, 200.0]
       >
   """
   defn stft(data, window, opts \\ []) do
     {frame_size} = Nx.shape(window)
 
-    {overlap_size, fs} =
+    {overlap_size, fs, padding} =
       transform({frame_size, opts}, fn {frame_size, opts} ->
         opts =
           Keyword.validate!(opts, [
             :overlap_size,
             :window,
-            :window_padding,
+            window_padding: :valid,
             fs: 100,
             nfft: :power_of_two
           ])
@@ -62,13 +62,13 @@ defmodule NxSignal do
 
         overlap_size = opts[:overlap_size] || div(frame_size, 2)
 
-        {overlap_size, fs}
+        {overlap_size, fs, opts[:window_padding]}
       end)
 
     spectrum =
       data
       |> as_windowed(
-        padding: opts[:window_padding],
+        padding: padding,
         window_size: frame_size,
         stride: frame_size - overlap_size
       )
@@ -183,20 +183,38 @@ defmodule NxSignal do
           [0, 0]
         ]
       >
-  """
-  defn as_windowed(tensor, opts \\ []) do
-    case opts[:padding] do
-      :reflect ->
-        as_windowed_reflect_padding(tensor, opts)
 
-      _ ->
-        as_windowed_non_reflect_padding(tensor, opts)
+      iex> t = Nx.iota({7});
+      iex> NxSignal.as_windowed(t, window_size: 6, padding: :reflect, stride: 1)
+      #Nx.Tensor<
+        s64[8][6]
+        [
+          [1, 2, 1, 0, 1, 2],
+          [2, 1, 0, 1, 2, 3],
+          [1, 0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4, 5],
+          [1, 2, 3, 4, 5, 6],
+          [2, 3, 4, 5, 6, 5],
+          [3, 4, 5, 6, 5, 4],
+          [4, 5, 6, 5, 4, 3]
+        ]
+      >
+  """
+  deftransform as_windowed(tensor, opts \\ []) do
+    if opts[:padding] == :reflect do
+      as_windowed_reflect_padding(tensor, opts)
+    else
+      as_windowed_non_reflect_padding(tensor, opts)
     end
   end
 
   deftransformp as_windowed_parse_opts(shape, opts, :reflect) do
     window_size = opts[:window_size]
-    as_windowed_parse_opts(shape, Keyword.put(opts, :padding, [{div(window_size, 2), 0}]))
+
+    as_windowed_parse_opts(
+      shape,
+      Keyword.put(opts, :padding, [{div(window_size, 2), div(window_size, 2)}])
+    )
   end
 
   deftransformp as_windowed_parse_opts(shape, opts) do
@@ -298,7 +316,11 @@ defmodule NxSignal do
         end
       end
 
-    output
+    # Now we need to handle the tail-end of the windows,
+    # since they are currently all the same value. We want to apply the tapering-off
+    # like we did with the initial windows.
+
+    apply_right_padding(output)
   end
 
   deftransformp generate_leading_window_indices(window_size, stride) do
@@ -310,6 +332,17 @@ defmodule NxSignal do
       |> pad_reflect(window_size)
     end
     |> Nx.stack()
+  end
+
+  defnp apply_right_padding(output) do
+    offsets =
+      (output[-1] == output) |> Nx.all(axes: [1], keep_axes: true) |> Nx.cumulative_sum(axis: 0)
+
+    idx = Nx.iota(Nx.shape(output), axis: 1) + Nx.select(offsets != 0, offsets - 1, 0)
+
+    [output, Nx.reverse(output[[0..-1//1, 0..-2//1]], axes: [1])]
+    |> Nx.concatenate(axis: 1)
+    |> Nx.take_along_axis(idx, axis: 1)
   end
 
   @doc """
