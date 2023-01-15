@@ -21,8 +21,7 @@ defmodule NxSignal.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:nx, "~> 0.4"},
-      {:exla, "~> 0.4"}
+      {:nx, "~> 0.4"}
     ]
   end
 end
