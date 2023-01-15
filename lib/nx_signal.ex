@@ -75,12 +75,12 @@ defmodule NxSignal do
       |> Nx.multiply(window)
       |> Nx.fft(length: opts[:nfft])
 
-    {num_frames, num_frequencies} = Nx.shape(spectrum)
+    {num_frames, nfft} = Nx.shape(spectrum)
 
     frequencies =
-      stft_frequencies(
+      fft_frequencies(
         fs: fs,
-        num_frequencies: num_frequencies
+        nfft: nfft
       )
 
     # assign the middle of the equivalent time window as the time for the given frame
@@ -89,11 +89,29 @@ defmodule NxSignal do
     {Nx.reshape(spectrum, spectrum.shape, names: [:frames, :frequencies]), times, frequencies}
   end
 
-  defn stft_frequencies(opts \\ []) do
-    opts = keyword!(opts, [:num_frequencies, :fs, type: {:f, 32}, names: [:frequencies]])
+  @doc """
+  Computes the frequency bins for a FFT with given options.
 
-    Nx.iota({opts[:num_frequencies]}, type: opts[:type], names: opts[:names]) * opts[:fs] /
-      opts[:num_frequencies]
+  ## Options
+
+    * `:nfft` - Number of FFT frequency bins.
+    * `:fs` - Sampling frequency in Hz.
+    * `:type` - Optional output type. Defaults to `{:f, 32}`
+    * `:names` - Optional axis name for the tensor. Defaults to `:frequencies`
+
+  ## Examples
+
+      iex> NxSignal.fft_frequencies(nfft: 10, fs: 1.6e4)
+      #Nx.Tensor<
+        f32[frequencies: 10]
+        [0.0, 1.6e3, 3.2e3, 4.8e3, 6.4e3, 8.0e3, 9.6e3, 1.12e4, 1.28e4, 1.44e4]
+      >
+  """
+  defn fft_frequencies(opts \\ []) do
+    opts = keyword!(opts, [:nfft, :fs, type: {:f, 32}, names: [:frequencies]])
+
+    Nx.iota({opts[:nfft]}, type: opts[:type], names: opts[:names]) * opts[:fs] /
+      opts[:nfft]
   end
 
   @doc """
@@ -187,7 +205,7 @@ defmodule NxSignal do
       iex> t = Nx.iota({7});
       iex> NxSignal.as_windowed(t, window_size: 6, padding: :reflect, stride: 1)
       #Nx.Tensor<
-        s64[8][6]
+        s64[7][6]
         [
           [1, 2, 1, 0, 1, 2],
           [2, 1, 0, 1, 2, 3],
@@ -195,8 +213,7 @@ defmodule NxSignal do
           [0, 1, 2, 3, 4, 5],
           [1, 2, 3, 4, 5, 6],
           [2, 3, 4, 5, 6, 5],
-          [3, 4, 5, 6, 5, 4],
-          [4, 5, 6, 5, 4, 3]
+          [3, 4, 5, 6, 5, 4]
         ]
       >
   """
@@ -346,6 +363,37 @@ defmodule NxSignal do
     |> Nx.take_along_axis(idx, axis: 1)
   end
 
+  defnp pad_reflect(window, target_size) do
+    case Nx.shape(window) do
+      {^target_size} ->
+        window
+
+      {n} ->
+        pad_length = target_size - n
+
+        period =
+          case pad_length do
+            1 ->
+              Nx.tensor([1])
+
+            2 ->
+              Nx.tensor([1, 2]) |> Nx.remainder(n)
+
+            _ ->
+              Nx.concatenate([
+                Nx.iota({n - 1})[1..-1//1],
+                (n - Nx.iota({n})) |> Nx.slice([1], [n - 1]),
+                Nx.tensor([0])
+              ])
+          end
+
+        idx = Nx.iota({pad_length}) |> Nx.remainder(2 * n - 2)
+        pad = window |> Nx.take(Nx.take(period, idx)) |> Nx.reverse()
+
+        Nx.concatenate([pad, window])
+    end
+  end
+
   @doc """
   Performs the overlap-and-add algorithm over
   an M by N tensor, where M is the number of
@@ -421,24 +469,45 @@ defmodule NxSignal do
   end
 
   @doc """
-  Generates MEL-scale weights
+  Generates weights for converting an STFT representation into MEL-scale.
 
-  See also: `stft/3`
+  See also: `stft/3`, `istft/3`, `stft_to_mel/2`
+
+  ## Options
+
+    * `:nfft` - Number of FFT bins
+    * `:fs` - Sampling frequency in Hz
+    * `:nmels` - Number of target MEL bins. Defaults to 128
+    * `:type` - Target output type. Defaults to `{:f, 32}`
+
+  ## Examples
+
+      iex> NxSignal.mel_filters(nfft: 10, fs: 8.0e3, nmels: 5)
+      #Nx.Tensor<
+        f32[5][frequencies: 10]
+        [
+          [0.0, 8.132208604365587e-4, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+          [0.0, 9.966354118660092e-4, 2.1939928410574794e-4, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+          [0.0, 0.0, 9.502929169684649e-4, 4.1546561988070607e-4, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+          [0.0, 0.0, 0.0, 4.031018470413983e-4, 5.27756754308939e-4, 2.5772282970137894e-4, 0.0, 0.0, 0.0, 0.0],
+          [0.0, 0.0, 0.0, 0.0, 7.307869964279234e-5, 2.3386787506751716e-4, 3.829616471193731e-4, 2.872212789952755e-4, 1.9148093997500837e-4, 9.574058640282601e-5]
+        ]
+      >
   """
   defn mel_filters(opts \\ []) do
-    opts = keyword!(opts, [:fs, :nfft, n_mels: 128, type: {:f, 32}])
-    n_mels = opts[:n_mels]
+    opts = keyword!(opts, [:nfft, :fs, nmels: 128, type: {:f, 32}])
+    nmels = opts[:nmels]
     nfft = opts[:nfft]
     fs = opts[:fs]
     type = opts[:type]
 
-    fftfreqs = stft_frequencies(fs: fs, type: type, num_frequencies: nfft)[0..div(nfft, 2)]
+    fftfreqs = fft_frequencies(fs: fs, type: type, nfft: nfft)
 
     # magic numbers :p
     min_mel = 0
     max_mel = 45.245640471924965
 
-    mels = linspace(min_mel, max_mel, n: n_mels + 2)
+    mels = linspace(min_mel, max_mel, n: nmels + 2)
 
     f_min = 0
     f_sp = 200.0 / 3
@@ -462,37 +531,73 @@ defmodule NxSignal do
     fdiff = Nx.new_axis(mel_f[1..-1//1] - mel_f[0..-2//1], 1)
     ramps = Nx.new_axis(mel_f, 1) - fftfreqs
 
-    lower = -ramps[0..(n_mels - 1)] / fdiff[0..(n_mels - 1)]
-    upper = ramps[2..(n_mels + 1)//1] / fdiff[1..n_mels]
+    lower = -ramps[0..(nmels - 1)] / fdiff[0..(nmels - 1)]
+    upper = ramps[2..(nmels + 1)//1] / fdiff[1..nmels]
     weights = Nx.max(0, Nx.min(lower, upper))
 
-    enorm = 2.0 / (mel_f[2..(n_mels + 1)] - mel_f[0..(n_mels - 1)])
+    enorm = 2.0 / (mel_f[2..(nmels + 1)] - mel_f[0..(nmels - 1)])
 
     weights * Nx.new_axis(enorm, 1)
   end
 
+  @doc """
+  Converts a given STFT time-frequency spectrum into a MEL-scale time-frequency spectrum.
+
+  See also: `stft/3`, `istft/3`, `mel_filters/1`
+
+  ## Options
+
+    * `:nfft` - Number of FFT bins
+    * `:fs` - Sampling frequency in Hz
+    * `:nmels` - Number of target MEL bins. Defaults to 128
+    * `:type` - Target output type. Defaults to `{:f, 32}`
+
+  ## Examples
+
+      iex> nfft = 16
+      iex> fs = 8.0e3
+      iex> {z, _, _} = NxSignal.stft(Nx.iota({10}), NxSignal.Windows.hann(n: 4), overlap_size: 2, nfft: nfft, fs: fs, window_padding: :reflect)
+      iex> Nx.axis_size(z, :frequencies)
+      16
+      iex> Nx.axis_size(z, :frames)
+      5
+      iex> NxSignal.stft_to_mel(z, nfft: nfft, fs: fs, nmels: 4)
+      #Nx.Tensor<
+        f32[frames: 5][mel: 4]
+        [
+          [0.29003971815109253, 0.17417210340499878, 0.1842685341835022, 0.09792494773864746],
+          [0.6093796491622925, 0.5647201538085938, 0.43530213832855225, 0.08610272407531738],
+          [0.7584013938903809, 0.7084797024726868, 0.5636037588119507, 0.178847074508667],
+          [0.8461682796478271, 0.7952268719673157, 0.6469860672950745, 0.25176137685775757],
+          [0.908539891242981, 0.8572380542755127, 0.7077747583389282, 0.3083939552307129]
+        ]
+      >
+  """
   defn stft_to_mel(z, opts \\ []) do
     magnitudes = Nx.abs(z) ** 2
     filters = mel_filters(opts)
 
-    freq_size = Nx.axis_size(filters, :frequencies)
+    freq_size = div(opts[:nfft], 2)
 
-    real_frequencies_mag = Nx.slice_along_axis(magnitudes, 0, freq_size, axis: :frequencies)
+    real_freqs_mag = Nx.slice_along_axis(magnitudes, 0, freq_size, axis: :frequencies)
+    real_freqs_filters = Nx.slice_along_axis(filters, 0, freq_size, axis: :frequencies)
 
     mel_spec =
       Nx.dot(
-        filters,
+        real_freqs_mag,
         [:frequencies],
-        real_frequencies_mag,
+        real_freqs_filters,
         [:frequencies]
       )
+
+    mel_spec = Nx.reshape(mel_spec, Nx.shape(mel_spec), names: [:frames, :mel])
 
     log_spec = Nx.log(Nx.clip(mel_spec, 1.0e-10, :infinity)) / Nx.log(10)
     log_spec = Nx.max(log_spec, Nx.reduce_max(log_spec) - 8)
     (log_spec + 4) / 4
   end
 
-  defn linspace(min, max, opts \\ []) do
+  defnp linspace(min, max, opts \\ []) do
     opts = keyword!(opts, [:n, endpoint: true])
 
     n = opts[:n]
@@ -508,36 +613,5 @@ defmodule NxSignal do
 
     step = (max - min) / divisor
     min + Nx.iota({n}) * step
-  end
-
-  defn pad_reflect(window, target_size) do
-    case Nx.shape(window) do
-      {^target_size} ->
-        window
-
-      {n} ->
-        pad_length = target_size - n
-
-        period =
-          case pad_length do
-            1 ->
-              Nx.tensor([1])
-
-            2 ->
-              Nx.tensor([1, 2]) |> Nx.remainder(n)
-
-            _ ->
-              Nx.concatenate([
-                Nx.iota({n - 1})[1..-1//1],
-                (n - Nx.iota({n})) |> Nx.slice([1], [n - 1]),
-                Nx.tensor([0])
-              ])
-          end
-
-        idx = Nx.iota({pad_length}) |> Nx.remainder(2 * n - 2)
-        pad = window |> Nx.take(Nx.take(period, idx)) |> Nx.reverse()
-
-        Nx.concatenate([pad, window])
-    end
   end
 end
