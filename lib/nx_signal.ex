@@ -213,7 +213,7 @@ defmodule NxSignal do
 
     as_windowed_parse_opts(
       shape,
-      Keyword.put(opts, :padding, [{div(window_size, 2), div(window_size, 2)}])
+      Keyword.put(opts, :padding, [{div(window_size, 2), div(window_size, 2) - 1}])
     )
   end
 
@@ -432,7 +432,7 @@ defmodule NxSignal do
     fs = opts[:fs]
     type = opts[:type]
 
-    fftfreqs = stft_frequencies(fs: fs, type: type, num_frequencies: nfft)[0..(div(nfft, 2) - 1)]
+    fftfreqs = stft_frequencies(fs: fs, type: type, num_frequencies: nfft)[0..div(nfft, 2)]
 
     # magic numbers :p
     min_mel = 0
@@ -447,9 +447,10 @@ defmodule NxSignal do
     min_log_hz = 1_000
     min_log_mel = (min_log_hz - f_min) / f_sp
 
+    # numpy uses the f64 value by default
     logstep = Nx.log(6.4) / 27
 
-    log_t = print_value(mels >= min_log_mel)
+    log_t = mels >= min_log_mel
 
     # This is the same as freqs[log_t] = min_log_hz * Nx.exp(logstep * (mels[log_t] - min_log_mel))
     # notice that since freqs and mels are indexed by the same conditional tensor, we don't
@@ -485,17 +486,27 @@ defmodule NxSignal do
         real_frequencies_mag,
         [:frequencies]
       )
-      |> print_value()
 
     log_spec = Nx.log(Nx.clip(mel_spec, 1.0e-10, :infinity)) / Nx.log(10)
     log_spec = Nx.max(log_spec, Nx.reduce_max(log_spec) - 8)
     (log_spec + 4) / 4
   end
 
-  defnp linspace(min, max, opts \\ []) do
-    [n: n] = keyword!(opts, [:n])
+  defn linspace(min, max, opts \\ []) do
+    opts = keyword!(opts, [:n, endpoint: true])
 
-    step = (max - min) / n
+    n = opts[:n]
+
+    divisor =
+      case opts[:endpoint] do
+        true ->
+          n - 1
+
+        _ ->
+          n
+      end
+
+    step = (max - min) / divisor
     min + Nx.iota({n}) * step
   end
 
