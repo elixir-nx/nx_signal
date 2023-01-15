@@ -481,50 +481,54 @@ defmodule NxSignal do
 
   See also: `stft/3`, `istft/3`, `stft_to_mel/2`
 
-  ## Options
+  ## Arguments
 
-    * `:nfft` - Number of FFT bins
-    * `:fs` - Sampling frequency in Hz
-    * `:nmels` - Number of target MEL bins. Defaults to 128
+    * `nfft` - Number of FFT bins
+    * `nmels` - Number of target MEL bins
+    * `fs` - Sampling frequency in Hz
+
+  ## Options
     * `:max_mel` - the pitch for the last MEL bin before log scaling. Defaults to 3016
     * `:mel_frequency_spacing` - the distance in Hz between two MEL bins before log scaling. Defaults to 66.6
     * `:type` - Target output type. Defaults to `{:f, 32}`
 
   ## Examples
 
-      iex> NxSignal.mel_filters(nfft: 10, fs: 8.0e3, nmels: 5)
+      iex> NxSignal.mel_filters(10, 5, 8.0e3)
       #Nx.Tensor<
         f32[mels: 5][frequencies: 10]
         [
-          [0.0, 8.129207417368889e-4, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-          [0.0, 9.972017724066973e-4, 2.1870265481993556e-4, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-          [0.0, 0.0, 9.510896052233875e-4, 4.1505080298520625e-4, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-          [0.0, 0.0, 0.0, 4.035892488900572e-4, 5.276654846966267e-4, 2.5741232093423605e-4, 0.0, 0.0, 0.0, 0.0],
-          [0.0, 0.0, 0.0, 0.0, 7.329042273340747e-5, 2.3422071535605937e-4, 3.8295125705190003e-4, 2.8712046332657337e-4, 1.9128969870507717e-4, 9.545891225570813e-5]
+          [0.0, 8.129207999445498e-4, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+          [0.0, 9.972016559913754e-4, 2.1870288765057921e-4, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+          [0.0, 0.0, 9.510891977697611e-4, 4.150509194005281e-4, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+          [0.0, 0.0, 0.0, 4.035891906823963e-4, 5.276656011119485e-4, 2.574124082457274e-4, 0.0, 0.0, 0.0, 0.0],
+          [0.0, 0.0, 0.0, 0.0, 7.329034269787371e-5, 2.342205698369071e-4, 3.8295105332508683e-4, 2.8712040511891246e-4, 1.9128978601656854e-4, 9.545915963826701e-5]
         ]
       >
   """
-  defn mel_filters(opts \\ []) do
+  deftransform mel_filters(nfft, nmels, fs, opts \\ []) do
     opts =
-      keyword!(opts, [
-        :nfft,
-        :fs,
-        nmels: 128,
+      Keyword.validate!(opts,
         max_mel: 3016,
         mel_frequency_spacing: 200 / 3,
         type: {:f, 32}
-      ])
+      )
 
-    nmels = opts[:nmels]
+    mel_filters_n(fs, opts[:max_mel], opts[:mel_frequency_spacing],
+      type: opts[:type],
+      nfft: nfft,
+      nmels: nmels
+    )
+  end
+
+  defnp mel_filters_n(fs, max_mel, f_sp, opts \\ []) do
     nfft = opts[:nfft]
-    fs = opts[:fs]
+    nmels = opts[:nmels]
     type = opts[:type]
-    max_mel = opts[:max_mel]
-    f_sp = opts[:mel_frequency_spacing]
 
     fftfreqs = fft_frequencies(fs, type: type, nfft: nfft)
 
-    mels = linspace(0, max_mel / f_sp, n: nmels + 2, axis_name: :mels)
+    mels = linspace(0, max_mel / f_sp, type: type, n: nmels + 2, axis_name: :mels)
     freqs = f_sp * mels
 
     min_log_hz = 1_000
@@ -557,10 +561,13 @@ defmodule NxSignal do
 
   See also: `stft/3`, `istft/3`, `mel_filters/1`
 
+  ## Arguments
+    * `z` - STFT spectrum
+    * `fs` - Sampling frequency in Hz
+
   ## Options
 
     * `:nfft` - Number of FFT bins
-    * `:fs` - Sampling frequency in Hz
     * `:nmels` - Number of target MEL bins. Defaults to 128
     * `:type` - Target output type. Defaults to `{:f, 32}`
 
@@ -573,7 +580,7 @@ defmodule NxSignal do
       16
       iex> Nx.axis_size(z, :frames)
       5
-      iex> NxSignal.stft_to_mel(z, nfft: nfft, fs: fs, nmels: 4)
+      iex> NxSignal.stft_to_mel(z, fs, nfft: nfft, nmels: 4)
       #Nx.Tensor<
         f32[frames: 5][mel: 4]
         [
@@ -585,9 +592,12 @@ defmodule NxSignal do
         ]
       >
   """
-  defn stft_to_mel(z, opts \\ []) do
+  defn stft_to_mel(z, fs, opts \\ []) do
+    opts = keyword!(opts, [:nfft, :nmels, :max_mel, :mel_frequency_spacing, type: {:f, 32}])
+
     magnitudes = Nx.abs(z) ** 2
-    filters = mel_filters(opts)
+
+    filters = mel_filters(opts[:nfft], opts[:nmels], fs, mel_filters_opts(opts))
 
     freq_size = div(opts[:nfft], 2)
 
@@ -609,7 +619,11 @@ defmodule NxSignal do
     (log_spec + 4) / 4
   end
 
-  defn linspace(min, max, opts \\ []) do
+  deftransformp mel_filters_opts(opts) do
+    Keyword.take(opts, [:max_mel, :mel_frequency_spacing, :type])
+  end
+
+  defnp linspace(min, max, opts \\ []) do
     opts = keyword!(opts, [:n, :axis_name, type: {:f, 32}, endpoint: true])
 
     n = opts[:n]
