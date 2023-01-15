@@ -478,6 +478,8 @@ defmodule NxSignal do
     * `:nfft` - Number of FFT bins
     * `:fs` - Sampling frequency in Hz
     * `:nmels` - Number of target MEL bins. Defaults to 128
+    * `:max_mel` - the pitch for the last MEL bin before log scaling. Defaults to 3016
+    * `:mel_frequency_spacing` - the distance in Hz between two MEL bins before log scaling. Defaults to 66.6
     * `:type` - Target output type. Defaults to `{:f, 32}`
 
   ## Examples
@@ -486,35 +488,39 @@ defmodule NxSignal do
       #Nx.Tensor<
         f32[5][frequencies: 10]
         [
-          [0.0, 8.132208604365587e-4, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-          [0.0, 9.966354118660092e-4, 2.1939928410574794e-4, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-          [0.0, 0.0, 9.502929169684649e-4, 4.1546561988070607e-4, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-          [0.0, 0.0, 0.0, 4.031018470413983e-4, 5.27756754308939e-4, 2.5772282970137894e-4, 0.0, 0.0, 0.0, 0.0],
-          [0.0, 0.0, 0.0, 0.0, 7.307869964279234e-5, 2.3386787506751716e-4, 3.829616471193731e-4, 2.872212789952755e-4, 1.9148093997500837e-4, 9.574058640282601e-5]
+          [0.0, 8.129207417368889e-4, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+          [0.0, 9.972017724066973e-4, 2.1870265481993556e-4, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+          [0.0, 0.0, 9.510896052233875e-4, 4.1505080298520625e-4, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+          [0.0, 0.0, 0.0, 4.035892488900572e-4, 5.276654846966267e-4, 2.5741232093423605e-4, 0.0, 0.0, 0.0, 0.0],
+          [0.0, 0.0, 0.0, 0.0, 7.329042273340747e-5, 2.3422071535605937e-4, 3.8295125705190003e-4, 2.8712046332657337e-4, 1.9128969870507717e-4, 9.545891225570813e-5]
         ]
       >
   """
   defn mel_filters(opts \\ []) do
-    opts = keyword!(opts, [:nfft, :fs, nmels: 128, type: {:f, 32}])
+    opts =
+      keyword!(opts, [
+        :nfft,
+        :fs,
+        nmels: 128,
+        max_mel: 3016,
+        mel_frequency_spacing: 200 / 3,
+        type: {:f, 32}
+      ])
+
     nmels = opts[:nmels]
     nfft = opts[:nfft]
     fs = opts[:fs]
     type = opts[:type]
+    max_mel = opts[:max_mel]
+    f_sp = opts[:mel_frequency_spacing]
 
     fftfreqs = fft_frequencies(fs: fs, type: type, nfft: nfft)
 
-    # magic numbers :p
-    min_mel = 0
-    max_mel = 45.245640471924965
-
-    mels = linspace(min_mel, max_mel, n: nmels + 2)
-
-    f_min = 0
-    f_sp = 200.0 / 3
-    freqs = f_min + f_sp * mels
+    mels = linspace(0, max_mel / f_sp, n: nmels + 2)
+    freqs = f_sp * mels
 
     min_log_hz = 1_000
-    min_log_mel = (min_log_hz - f_min) / f_sp
+    min_log_mel = min_log_hz / f_sp
 
     # numpy uses the f64 value by default
     logstep = Nx.log(6.4) / 27
@@ -524,9 +530,7 @@ defmodule NxSignal do
     # This is the same as freqs[log_t] = min_log_hz * Nx.exp(logstep * (mels[log_t] - min_log_mel))
     # notice that since freqs and mels are indexed by the same conditional tensor, we don't
     # need to slice either of them
-    freqs = Nx.select(log_t, min_log_hz * Nx.exp(logstep * (mels - min_log_mel)), freqs)
-
-    mel_f = freqs
+    mel_f = Nx.select(log_t, min_log_hz * Nx.exp(logstep * (mels - min_log_mel)), freqs)
 
     fdiff = Nx.new_axis(mel_f[1..-1//1] - mel_f[0..-2//1], 1)
     ramps = Nx.new_axis(mel_f, 1) - fftfreqs
@@ -565,11 +569,11 @@ defmodule NxSignal do
       #Nx.Tensor<
         f32[frames: 5][mel: 4]
         [
-          [0.29003971815109253, 0.17417210340499878, 0.1842685341835022, 0.09792494773864746],
-          [0.6093796491622925, 0.5647201538085938, 0.43530213832855225, 0.08610272407531738],
-          [0.7584013938903809, 0.7084797024726868, 0.5636037588119507, 0.178847074508667],
-          [0.8461682796478271, 0.7952268719673157, 0.6469860672950745, 0.25176137685775757],
-          [0.908539891242981, 0.8572380542755127, 0.7077747583389282, 0.3083939552307129]
+          [0.2900530695915222, 0.17422175407409668, 0.18422472476959229, 0.09807997941970825],
+          [0.6093881130218506, 0.5647397041320801, 0.4353824257850647, 0.08635270595550537],
+          [0.7584103345870972, 0.7085014581680298, 0.5636920928955078, 0.179118812084198],
+          [0.8461772203445435, 0.7952491044998169, 0.6470762491226196, 0.2520409822463989],
+          [0.908548891544342, 0.8572604656219482, 0.7078656554222107, 0.3086767792701721]
         ]
       >
   """
@@ -597,7 +601,7 @@ defmodule NxSignal do
     (log_spec + 4) / 4
   end
 
-  defnp linspace(min, max, opts \\ []) do
+  defn linspace(min, max, opts \\ []) do
     opts = keyword!(opts, [:n, endpoint: true])
 
     n = opts[:n]
