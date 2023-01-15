@@ -44,26 +44,30 @@ defmodule NxSignal do
         [0.0, 200.0]
       >
   """
-  defn stft(data, window, opts \\ []) do
+  deftransform stft(data, window, opts \\ []) do
     {frame_size} = Nx.shape(window)
 
-    {overlap_size, fs, padding} =
-      transform({frame_size, opts}, fn {frame_size, opts} ->
-        opts =
-          Keyword.validate!(opts, [
-            :overlap_size,
-            :window,
-            window_padding: :valid,
-            fs: 100,
-            nfft: :power_of_two
-          ])
+    opts =
+      Keyword.validate!(opts, [
+        :overlap_size,
+        :window,
+        window_padding: :valid,
+        fs: 100,
+        nfft: :power_of_two
+      ])
 
-        fs = opts[:fs] || raise ArgumentError, "missing fs option"
+    fs = opts[:fs] || raise ArgumentError, "missing fs option"
 
-        overlap_size = opts[:overlap_size] || div(frame_size, 2)
+    overlap_size = opts[:overlap_size] || div(frame_size, 2)
 
-        {overlap_size, fs, opts[:window_padding]}
-      end)
+    stft_n(data, window, fs, Keyword.put(opts, :overlap_size, overlap_size))
+  end
+
+  defnp stft_n(data, window, fs, opts \\ []) do
+    {frame_size} = Nx.shape(window)
+    padding = opts[:window_padding]
+    nfft = opts[:nfft]
+    overlap_size = opts[:overlap_size]
 
     spectrum =
       data
@@ -73,18 +77,16 @@ defmodule NxSignal do
         stride: frame_size - overlap_size
       )
       |> Nx.multiply(window)
-      |> Nx.fft(length: opts[:nfft])
+      |> Nx.fft(length: nfft)
 
     {num_frames, nfft} = Nx.shape(spectrum)
 
-    frequencies =
-      fft_frequencies(
-        fs: fs,
-        nfft: nfft
-      )
+    frequencies = fft_frequencies(fs, nfft: nfft)
 
     # assign the middle of the equivalent time window as the time for the given frame
-    times = (Nx.iota({num_frames}, names: [:frames]) + 1) * frame_size / (2 * fs)
+    time_step = frame_size / (2 * fs)
+    last_frame = time_step * num_frames
+    times = linspace(time_step, last_frame, n: num_frames, axis_name: :frames)
 
     {Nx.reshape(spectrum, spectrum.shape, names: [:frames, :frequencies]), times, frequencies}
   end
@@ -92,26 +94,36 @@ defmodule NxSignal do
   @doc """
   Computes the frequency bins for a FFT with given options.
 
+  ## Arguments
+
+    * `fs` - Sampling frequency in Hz.
+
   ## Options
 
     * `:nfft` - Number of FFT frequency bins.
-    * `:fs` - Sampling frequency in Hz.
     * `:type` - Optional output type. Defaults to `{:f, 32}`
-    * `:names` - Optional axis name for the tensor. Defaults to `:frequencies`
+    * `:axis_name` - Optional axis name for the tensor. Defaults to `:frequencies`
 
   ## Examples
 
-      iex> NxSignal.fft_frequencies(nfft: 10, fs: 1.6e4)
+      iex> NxSignal.fft_frequencies(1.6e4, nfft: 10)
       #Nx.Tensor<
         f32[frequencies: 10]
         [0.0, 1.6e3, 3.2e3, 4.8e3, 6.4e3, 8.0e3, 9.6e3, 1.12e4, 1.28e4, 1.44e4]
       >
   """
-  defn fft_frequencies(opts \\ []) do
-    opts = keyword!(opts, [:nfft, :fs, type: {:f, 32}, names: [:frequencies]])
+  defn fft_frequencies(fs, opts \\ []) do
+    opts = keyword!(opts, [:nfft, type: {:f, 32}, axis_name: :frequencies, endpoint: false])
+    nfft = opts[:nfft]
 
-    Nx.iota({opts[:nfft]}, type: opts[:type], names: opts[:names]) * opts[:fs] /
-      opts[:nfft]
+    step = fs / nfft
+
+    linspace(0, step * nfft,
+      n: nfft,
+      type: opts[:type],
+      axis_name: opts[:axis_name],
+      endpoint: opts[:endpoint]
+    )
   end
 
   @doc """
@@ -244,14 +256,10 @@ defmodule NxSignal do
     [stride] =
       strides =
       case opts[:stride] do
-        stride when Elixir.Kernel.is_list(stride) ->
+        stride when is_list(stride) ->
           stride
 
-        stride
-        when Elixir.Kernel.and(
-               Elixir.Kernel.is_integer(stride),
-               Elixir.Kernel.>=(stride, 1)
-             ) ->
+        stride when is_integer(stride) and stride >= 1 ->
           [stride]
 
         stride ->
@@ -262,7 +270,7 @@ defmodule NxSignal do
     dilations = List.duplicate(1, Nx.rank(shape))
 
     {pooled_shape, padding_config} =
-      Nx.Shape.pool(shape, window_dimensions, strides, padding, dilations)
+      NxSignal.Shape.pool(shape, window_dimensions, strides, padding, dilations)
 
     output_shape = {Tuple.product(pooled_shape), window_size}
 
@@ -486,7 +494,7 @@ defmodule NxSignal do
 
       iex> NxSignal.mel_filters(nfft: 10, fs: 8.0e3, nmels: 5)
       #Nx.Tensor<
-        f32[5][frequencies: 10]
+        f32[mels: 5][frequencies: 10]
         [
           [0.0, 8.129207417368889e-4, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
           [0.0, 9.972017724066973e-4, 2.1870265481993556e-4, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
@@ -514,9 +522,9 @@ defmodule NxSignal do
     max_mel = opts[:max_mel]
     f_sp = opts[:mel_frequency_spacing]
 
-    fftfreqs = fft_frequencies(fs: fs, type: type, nfft: nfft)
+    fftfreqs = fft_frequencies(fs, type: type, nfft: nfft)
 
-    mels = linspace(0, max_mel / f_sp, n: nmels + 2)
+    mels = linspace(0, max_mel / f_sp, n: nmels + 2, axis_name: :mels)
     freqs = f_sp * mels
 
     min_log_hz = 1_000
@@ -602,7 +610,7 @@ defmodule NxSignal do
   end
 
   defn linspace(min, max, opts \\ []) do
-    opts = keyword!(opts, [:n, endpoint: true])
+    opts = keyword!(opts, [:n, :axis_name, type: {:f, 32}, endpoint: true])
 
     n = opts[:n]
 
@@ -616,6 +624,6 @@ defmodule NxSignal do
       end
 
     step = (max - min) / divisor
-    min + Nx.iota({n}) * step
+    min + Nx.iota({n}, names: [opts[:axis_name]], type: opts[:type]) * step
   end
 end
