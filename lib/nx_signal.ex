@@ -86,7 +86,7 @@ defmodule NxSignal do
     # assign the middle of the equivalent time window as the time for the given frame
     time_step = frame_size / (2 * fs)
     last_frame = time_step * num_frames
-    times = linspace(time_step, last_frame, n: num_frames, axis_name: :frames)
+    times = Nx.linspace(time_step, last_frame, n: num_frames, name: :frames)
 
     {Nx.reshape(spectrum, spectrum.shape, names: [:frames, :frequencies]), times, frequencies}
   end
@@ -102,7 +102,7 @@ defmodule NxSignal do
 
     * `:nfft` - Number of FFT frequency bins.
     * `:type` - Optional output type. Defaults to `{:f, 32}`
-    * `:axis_name` - Optional axis name for the tensor. Defaults to `:frequencies`
+    * `:name` - Optional axis name for the tensor. Defaults to `:frequencies`
 
   ## Examples
 
@@ -113,15 +113,15 @@ defmodule NxSignal do
       >
   """
   defn fft_frequencies(fs, opts \\ []) do
-    opts = keyword!(opts, [:nfft, type: {:f, 32}, axis_name: :frequencies, endpoint: false])
+    opts = keyword!(opts, [:nfft, type: {:f, 32}, name: :frequencies, endpoint: false])
     nfft = opts[:nfft]
 
     step = fs / nfft
 
-    linspace(0, step * nfft,
+    Nx.linspace(0, step * nfft,
       n: nfft,
       type: opts[:type],
-      axis_name: opts[:axis_name],
+      name: opts[:name],
       endpoint: opts[:endpoint]
     )
   end
@@ -528,7 +528,7 @@ defmodule NxSignal do
 
     fftfreqs = fft_frequencies(fs, type: type, nfft: nfft)
 
-    mels = linspace(0, max_mel / f_sp, type: type, n: nmels + 2, axis_name: :mels)
+    mels = Nx.linspace(0, max_mel / f_sp, type: type, n: nmels + 2, name: :mels)
     freqs = f_sp * mels
 
     min_log_hz = 1_000
@@ -621,23 +621,5 @@ defmodule NxSignal do
 
   deftransformp mel_filters_opts(opts) do
     Keyword.take(opts, [:max_mel, :mel_frequency_spacing, :type])
-  end
-
-  defnp linspace(min, max, opts \\ []) do
-    opts = keyword!(opts, [:n, :axis_name, type: {:f, 32}, endpoint: true])
-
-    n = opts[:n]
-
-    divisor =
-      case opts[:endpoint] do
-        true ->
-          n - 1
-
-        _ ->
-          n
-      end
-
-    step = (max - min) / divisor
-    min + Nx.iota({n}, names: [opts[:axis_name]], type: opts[:type]) * step
   end
 end
