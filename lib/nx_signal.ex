@@ -56,7 +56,8 @@ defmodule NxSignal do
         fft_length: :power_of_two
       ])
 
-    sampling_frequency = opts[:sampling_frequency] || raise ArgumentError, "missing sampling_frequency option"
+    sampling_frequency =
+      opts[:sampling_frequency] || raise ArgumentError, "missing sampling_frequency option"
 
     overlap_length = opts[:overlap_length] || div(frame_length, 2)
 
@@ -267,7 +268,7 @@ defmodule NxSignal do
                 "expected an integer >= 1 or a list of integers, got: #{inspect(stride)}"
       end
 
-    padding_config = NxSignal.Shape.to_padding_config(shape, window_dimensions, padding)
+    padding_config = as_windowed_to_padding_config(shape, window_dimensions, padding)
 
     # trick so that we can get Nx to calculate the pooled shape for us
     %{shape: pooled_shape} =
@@ -280,12 +281,45 @@ defmodule NxSignal do
 
     output_shape = {Tuple.product(pooled_shape), window_length}
 
-    {window_length, stride, Enum.map(padding_config, fn {x, y} -> {x, y, 0} end), output_shape}
+    {window_length, stride, padding_config, output_shape}
+  end
+
+  defp as_windowed_to_padding_config(shape, kernel_size, mode) do
+    case mode do
+      :valid ->
+        List.duplicate({0, 0, 0}, tuple_size(shape))
+
+      :same ->
+        Enum.zip_with(Tuple.to_list(shape), Tuple.to_list(kernel_size), fn dim, k ->
+          padding_size = max(dim - 1 + k - dim, 0)
+          {floor(padding_size / 2), ceil(padding_size / 2), 0}
+        end)
+
+      config when is_list(config) ->
+        Enum.map(config, fn
+          {x, y} when is_integer(x) and is_integer(y) ->
+            {x, y, 0}
+
+          _other ->
+            raise ArgumentError,
+                  "padding must be a list of {high, low} tuples, where each element is an integer. " <>
+                    "Got: #{inspect(config)}"
+        end)
+
+        config
+
+      mode ->
+        raise ArgumentError,
+              "invalid padding mode specified, padding must be one" <>
+                " of :valid, :same, or a padding configuration, got:" <>
+                " #{inspect(mode)}"
+    end
   end
 
   defnp as_windowed_non_reflect_padding(tensor, opts \\ []) do
     # current implementation only supports windowing 1D tensors
-    {window_length, stride, padding, output_shape} = as_windowed_parse_opts(Nx.shape(tensor), opts)
+    {window_length, stride, padding, output_shape} =
+      as_windowed_parse_opts(Nx.shape(tensor), opts)
 
     output = Nx.broadcast(Nx.tensor(0, type: tensor.type), output_shape)
     {num_windows, _} = Nx.shape(output)
@@ -599,11 +633,13 @@ defmodule NxSignal do
       >
   """
   defn stft_to_mel(z, sampling_frequency, opts \\ []) do
-    opts = keyword!(opts, [:fft_length, :mel_bins, :max_mel, :mel_frequency_spacing, type: {:f, 32}])
+    opts =
+      keyword!(opts, [:fft_length, :mel_bins, :max_mel, :mel_frequency_spacing, type: {:f, 32}])
 
     magnitudes = Nx.abs(z) ** 2
 
-    filters = mel_filters(opts[:fft_length], opts[:mel_bins], sampling_frequency, mel_filters_opts(opts))
+    filters =
+      mel_filters(opts[:fft_length], opts[:mel_bins], sampling_frequency, mel_filters_opts(opts))
 
     freq_size = div(opts[:fft_length], 2)
 
