@@ -267,10 +267,16 @@ defmodule NxSignal do
                 "expected an integer >= 1 or a list of integers, got: #{inspect(stride)}"
       end
 
-    dilations = List.duplicate(1, Nx.rank(shape))
+    padding_config = NxSignal.Shape.to_padding_config(shape, window_dimensions, padding)
 
-    {pooled_shape, padding_config} =
-      NxSignal.Shape.pool(shape, window_dimensions, strides, padding, dilations)
+    # trick so that we can get Nx to calculate the pooled shape for us
+    %{shape: pooled_shape} =
+      Nx.window_max(
+        Nx.iota(shape, backend: Nx.Defn.Expr),
+        window_dimensions,
+        padding: padding,
+        strides: strides
+      )
 
     output_shape = {Tuple.product(pooled_shape), window_size}
 
