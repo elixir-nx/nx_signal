@@ -306,8 +306,6 @@ defmodule NxSignal do
                     "Got: #{inspect(config)}"
         end)
 
-        config
-
       mode ->
         raise ArgumentError,
               "invalid padding mode specified, padding must be one" <>
