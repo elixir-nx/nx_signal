@@ -17,13 +17,13 @@ defmodule NxSignal do
 
     * `:sampling_frequency` - the sampling frequency for the input in Hz. Defaults to `1000`.
     * `:fft_length` - the DFT length that will be passed to `Nx.fft/2`. Defaults to `:power_of_two`.
-    * `:overlap_size` - the number of samples for the overlap between frames.
-    Defaults to `div(frame_size, 2)`.
+    * `:overlap_length` - the number of samples for the overlap between frames.
+    Defaults to `div(frame_length, 2)`.
     * `:window_padding` - `:reflect`, `:zeros` or `nil`. See `as_windowed/3` for more details.
 
   ## Examples
 
-      iex> {z, t, f} = NxSignal.stft(Nx.iota({4}), NxSignal.Windows.rectangular(n: 2), overlap_size: 1, fft_length: 2, sampling_frequency: 400)
+      iex> {z, t, f} = NxSignal.stft(Nx.iota({4}), NxSignal.Windows.rectangular(n: 2), overlap_length: 1, fft_length: 2, sampling_frequency: 400)
       iex> z
       #Nx.Tensor<
         c64[frames: 3][frequencies: 2]
@@ -45,11 +45,11 @@ defmodule NxSignal do
       >
   """
   deftransform stft(data, window, opts \\ []) do
-    {frame_size} = Nx.shape(window)
+    {frame_length} = Nx.shape(window)
 
     opts =
       Keyword.validate!(opts, [
-        :overlap_size,
+        :overlap_length,
         :window,
         window_padding: :valid,
         sampling_frequency: 100,
@@ -58,23 +58,23 @@ defmodule NxSignal do
 
     sampling_frequency = opts[:sampling_frequency] || raise ArgumentError, "missing sampling_frequency option"
 
-    overlap_size = opts[:overlap_size] || div(frame_size, 2)
+    overlap_length = opts[:overlap_length] || div(frame_length, 2)
 
-    stft_n(data, window, sampling_frequency, Keyword.put(opts, :overlap_size, overlap_size))
+    stft_n(data, window, sampling_frequency, Keyword.put(opts, :overlap_length, overlap_length))
   end
 
   defnp stft_n(data, window, sampling_frequency, opts \\ []) do
-    {frame_size} = Nx.shape(window)
+    {frame_length} = Nx.shape(window)
     padding = opts[:window_padding]
     fft_length = opts[:fft_length]
-    overlap_size = opts[:overlap_size]
+    overlap_length = opts[:overlap_length]
 
     spectrum =
       data
       |> as_windowed(
         padding: padding,
-        window_size: frame_size,
-        stride: frame_size - overlap_size
+        window_size: frame_length,
+        stride: frame_length - overlap_length
       )
       |> Nx.multiply(window)
       |> Nx.fft(length: fft_length)
@@ -84,7 +84,7 @@ defmodule NxSignal do
     frequencies = fft_frequencies(sampling_frequency, fft_length: fft_length)
 
     # assign the middle of the equivalent time window as the time for the given frame
-    time_step = frame_size / (2 * sampling_frequency)
+    time_step = frame_length / (2 * sampling_frequency)
     last_frame = time_step * num_frames
     times = Nx.linspace(time_step, last_frame, n: num_frames, name: :frames)
 
@@ -144,7 +144,7 @@ defmodule NxSignal do
       ...>   [3, -1],
       ...>   [5, -1]
       ...> ])
-      iex> NxSignal.istft(z, NxSignal.Windows.rectangular(n: 2), overlap_size: 1, fft_length: 2, sampling_frequency: 400)
+      iex> NxSignal.istft(z, NxSignal.Windows.rectangular(n: 2), overlap_length: 1, fft_length: 2, sampling_frequency: 400)
       #Nx.Tensor<
         c64[frames: 3][samples: 2]
         [
@@ -418,17 +418,17 @@ defmodule NxSignal do
 
   ## Options
 
-    * `:overlap_size` - The number of overlapping samples between windows
+    * `:overlap_length` - The number of overlapping samples between windows
 
   ## Examples
 
-      iex> NxSignal.overlap_and_add(Nx.iota({3, 4}), overlap_size: 0)
+      iex> NxSignal.overlap_and_add(Nx.iota({3, 4}), overlap_length: 0)
       #Nx.Tensor<
         s64[12]
         [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
       >
 
-      iex> NxSignal.overlap_and_add(Nx.iota({3, 4}), overlap_size: 3)
+      iex> NxSignal.overlap_and_add(Nx.iota({3, 4}), overlap_length: 3)
       #Nx.Tensor<
         s64[6]
         [0, 5, 15, 18, 17, 11]
@@ -442,16 +442,16 @@ defmodule NxSignal do
         import Elixir.Kernel
 
         {num_windows, window_size} = Nx.shape(tensor)
-        overlap_size = opts[:overlap_size]
+        overlap_length = opts[:overlap_length]
 
-        unless is_number(overlap_size) and overlap_size < window_size do
+        unless is_number(overlap_length) and overlap_length < window_size do
           raise ArgumentError,
-                "overlap_size must be a number less than the window size #{window_size}, got: #{inspect(window_size)}"
+                "overlap_length must be a number less than the window size #{window_size}, got: #{inspect(window_size)}"
         end
 
-        stride = window_size - overlap_size
+        stride = window_size - overlap_length
 
-        output_holder_shape = {num_windows * stride + overlap_size}
+        output_holder_shape = {num_windows * stride + overlap_length}
 
         {stride, num_windows, window_size, output_holder_shape}
       end)
@@ -581,7 +581,7 @@ defmodule NxSignal do
 
       iex> fft_length = 16
       iex> sampling_frequency = 8.0e3
-      iex> {z, _, _} = NxSignal.stft(Nx.iota({10}), NxSignal.Windows.hann(n: 4), overlap_size: 2, fft_length: fft_length, sampling_frequency: sampling_frequency, window_padding: :reflect)
+      iex> {z, _, _} = NxSignal.stft(Nx.iota({10}), NxSignal.Windows.hann(n: 4), overlap_length: 2, fft_length: fft_length, sampling_frequency: sampling_frequency, window_padding: :reflect)
       iex> Nx.axis_size(z, :frequencies)
       16
       iex> Nx.axis_size(z, :frames)
