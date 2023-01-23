@@ -73,7 +73,7 @@ defmodule NxSignal do
       data
       |> as_windowed(
         padding: padding,
-        window_size: frame_length,
+        window_length: frame_length,
         stride: frame_length - overlap_length
       )
       |> Nx.multiply(window)
@@ -168,7 +168,7 @@ defmodule NxSignal do
 
   ## Options
 
-    * `:window_size` - the number of samples in a window
+    * `:window_length` - the number of samples in a window
     * `:stride` - The number of samples to skip between windows. Defaults to `1`.
     * `:padding` - A can be `:reflect` or a  valid padding as per `Nx.Shape.pad/2` over the
       input tensor's shape. Defaults to `:valid`. If `:reflect` or `:zeros`, the first window will be centered
@@ -177,7 +177,7 @@ defmodule NxSignal do
 
   ## Examples
 
-      iex> NxSignal.as_windowed(Nx.tensor([0, 1, 2, 3, 4, 10, 11, 12]), window_size: 4)
+      iex> NxSignal.as_windowed(Nx.tensor([0, 1, 2, 3, 4, 10, 11, 12]), window_length: 4)
       #Nx.Tensor<
         s64[5][4]
         [
@@ -189,7 +189,7 @@ defmodule NxSignal do
         ]
       >
 
-      iex> NxSignal.as_windowed(Nx.tensor([0, 1, 2, 3, 4, 10, 11, 12]), window_size: 3)
+      iex> NxSignal.as_windowed(Nx.tensor([0, 1, 2, 3, 4, 10, 11, 12]), window_length: 3)
       #Nx.Tensor<
         s64[6][3]
         [
@@ -202,7 +202,7 @@ defmodule NxSignal do
         ]
       >
 
-      iex> NxSignal.as_windowed(Nx.tensor([0, 1, 2, 3, 4, 10, 11]), window_size: 2, stride: 2, padding: [{0, 3}])
+      iex> NxSignal.as_windowed(Nx.tensor([0, 1, 2, 3, 4, 10, 11]), window_length: 2, stride: 2, padding: [{0, 3}])
       #Nx.Tensor<
         s64[5][2]
         [
@@ -215,7 +215,7 @@ defmodule NxSignal do
       >
 
       iex> t = Nx.iota({7});
-      iex> NxSignal.as_windowed(t, window_size: 6, padding: :reflect, stride: 1)
+      iex> NxSignal.as_windowed(t, window_length: 6, padding: :reflect, stride: 1)
       #Nx.Tensor<
         s64[7][6]
         [
@@ -238,18 +238,18 @@ defmodule NxSignal do
   end
 
   deftransformp as_windowed_parse_opts(shape, opts, :reflect) do
-    window_size = opts[:window_size]
+    window_length = opts[:window_length]
 
     as_windowed_parse_opts(
       shape,
-      Keyword.put(opts, :padding, [{div(window_size, 2), div(window_size, 2) - 1}])
+      Keyword.put(opts, :padding, [{div(window_length, 2), div(window_length, 2) - 1}])
     )
   end
 
   deftransformp as_windowed_parse_opts(shape, opts) do
-    opts = Keyword.validate!(opts, [:window_size, padding: :valid, stride: 1])
-    window_size = opts[:window_size]
-    window_dimensions = {window_size}
+    opts = Keyword.validate!(opts, [:window_length, padding: :valid, stride: 1])
+    window_length = opts[:window_length]
+    window_dimensions = {window_length}
 
     padding = opts[:padding]
 
@@ -278,26 +278,26 @@ defmodule NxSignal do
         strides: strides
       )
 
-    output_shape = {Tuple.product(pooled_shape), window_size}
+    output_shape = {Tuple.product(pooled_shape), window_length}
 
-    {window_size, stride, Enum.map(padding_config, fn {x, y} -> {x, y, 0} end), output_shape}
+    {window_length, stride, Enum.map(padding_config, fn {x, y} -> {x, y, 0} end), output_shape}
   end
 
   defnp as_windowed_non_reflect_padding(tensor, opts \\ []) do
     # current implementation only supports windowing 1D tensors
-    {window_size, stride, padding, output_shape} = as_windowed_parse_opts(Nx.shape(tensor), opts)
+    {window_length, stride, padding, output_shape} = as_windowed_parse_opts(Nx.shape(tensor), opts)
 
     output = Nx.broadcast(Nx.tensor(0, type: tensor.type), output_shape)
     {num_windows, _} = Nx.shape(output)
 
     index_template =
-      Nx.concatenate([Nx.broadcast(0, {window_size, 1}), Nx.iota({window_size, 1})], axis: 1)
+      Nx.concatenate([Nx.broadcast(0, {window_length, 1}), Nx.iota({window_length, 1})], axis: 1)
 
     {output, _, _, _, _} =
       while {output, i = 0, current_window = 0, t = Nx.pad(tensor, 0, padding), index_template},
             current_window < num_windows do
         indices = index_template + Nx.stack([current_window, 0])
-        updates = t |> Nx.slice([i], [window_size]) |> Nx.flatten()
+        updates = t |> Nx.slice([i], [window_length]) |> Nx.flatten()
 
         updated = Nx.indexed_add(output, indices, updates)
 
@@ -309,17 +309,17 @@ defmodule NxSignal do
 
   defnp as_windowed_reflect_padding(tensor, opts \\ []) do
     # current implementation only supports windowing 1D tensors
-    {window_size, stride, _padding, output_shape} =
+    {window_length, stride, _padding, output_shape} =
       as_windowed_parse_opts(Nx.shape(tensor), opts, :reflect)
 
     output = Nx.broadcast(Nx.tensor(0, type: tensor.type), output_shape)
     {num_windows, _} = Nx.shape(output)
 
     index_template =
-      Nx.concatenate([Nx.broadcast(0, {window_size, 1}), Nx.iota({window_size, 1})], axis: 1)
+      Nx.concatenate([Nx.broadcast(0, {window_length, 1}), Nx.iota({window_length, 1})], axis: 1)
 
-    leading_window_indices = generate_leading_window_indices(window_size, stride)
-    half_window = div(window_size - 1, 2) + 1
+    leading_window_indices = generate_leading_window_indices(window_length, stride)
+    half_window = div(window_length - 1, 2) + 1
 
     {output, _, _, _, _} =
       while {output, i = 0, current_window = 0, t = tensor, index_template},
@@ -340,7 +340,7 @@ defmodule NxSignal do
           true ->
             # Case where we can index a full window
             indices = index_template + Nx.stack([current_window, 0])
-            updates = t |> Nx.slice([i - div(window_size, 2)], [window_size]) |> Nx.flatten()
+            updates = t |> Nx.slice([i - div(window_length, 2)], [window_length]) |> Nx.flatten()
 
             updated = Nx.indexed_add(output, indices, updates)
 
@@ -355,13 +355,13 @@ defmodule NxSignal do
     apply_right_padding(output)
   end
 
-  deftransformp generate_leading_window_indices(window_size, stride) do
-    half_window = div(window_size, 2)
+  deftransformp generate_leading_window_indices(window_length, stride) do
+    half_window = div(window_length, 2)
 
     for offset <- 0..half_window//stride do
       {offset + half_window}
       |> Nx.iota()
-      |> pad_reflect(window_size)
+      |> pad_reflect(window_length)
     end
     |> Nx.stack()
   end
@@ -436,24 +436,24 @@ defmodule NxSignal do
 
   """
   defn overlap_and_add(tensor, opts \\ []) do
-    {stride, num_windows, window_size, output_holder_shape} =
+    {stride, num_windows, window_length, output_holder_shape} =
       transform({tensor, opts}, fn {tensor, opts} ->
         import Nx.Defn.Kernel, only: []
         import Elixir.Kernel
 
-        {num_windows, window_size} = Nx.shape(tensor)
+        {num_windows, window_length} = Nx.shape(tensor)
         overlap_length = opts[:overlap_length]
 
-        unless is_number(overlap_length) and overlap_length < window_size do
+        unless is_number(overlap_length) and overlap_length < window_length do
           raise ArgumentError,
-                "overlap_length must be a number less than the window size #{window_size}, got: #{inspect(window_size)}"
+                "overlap_length must be a number less than the window size #{window_length}, got: #{inspect(window_length)}"
         end
 
-        stride = window_size - overlap_length
+        stride = window_length - overlap_length
 
         output_holder_shape = {num_windows * stride + overlap_length}
 
-        {stride, num_windows, window_size, output_holder_shape}
+        {stride, num_windows, window_length, output_holder_shape}
       end)
 
     {output, _, _, _, _, _} =
@@ -461,7 +461,7 @@ defmodule NxSignal do
               out = Nx.broadcast(0, output_holder_shape),
               tensor,
               i = 0,
-              idx_template = Nx.iota({window_size, 1}),
+              idx_template = Nx.iota({window_length, 1}),
               stride,
               num_windows
             },
