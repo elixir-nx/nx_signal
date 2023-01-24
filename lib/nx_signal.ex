@@ -15,7 +15,7 @@ defmodule NxSignal do
 
   ## Options
 
-    * `:sampling_frequency` - the sampling frequency for the input in Hz. Defaults to `1000`.
+    * `:sampling_rate` - the sampling frequency for the input in Hz. Defaults to `1000`.
     * `:fft_length` - the DFT length that will be passed to `Nx.fft/2`. Defaults to `:power_of_two`.
     * `:overlap_length` - the number of samples for the overlap between frames.
     Defaults to `div(frame_length, 2)`.
@@ -23,7 +23,7 @@ defmodule NxSignal do
 
   ## Examples
 
-      iex> {z, t, f} = NxSignal.stft(Nx.iota({4}), NxSignal.Windows.rectangular(n: 2), overlap_length: 1, fft_length: 2, sampling_frequency: 400)
+      iex> {z, t, f} = NxSignal.stft(Nx.iota({4}), NxSignal.Windows.rectangular(n: 2), overlap_length: 1, fft_length: 2, sampling_rate: 400)
       iex> z
       #Nx.Tensor<
         c64[frames: 3][frequencies: 2]
@@ -52,19 +52,18 @@ defmodule NxSignal do
         :overlap_length,
         :window,
         window_padding: :valid,
-        sampling_frequency: 100,
+        sampling_rate: 100,
         fft_length: :power_of_two
       ])
 
-    sampling_frequency =
-      opts[:sampling_frequency] || raise ArgumentError, "missing sampling_frequency option"
+    sampling_rate = opts[:sampling_rate] || raise ArgumentError, "missing sampling_rate option"
 
     overlap_length = opts[:overlap_length] || div(frame_length, 2)
 
-    stft_n(data, window, sampling_frequency, Keyword.put(opts, :overlap_length, overlap_length))
+    stft_n(data, window, sampling_rate, Keyword.put(opts, :overlap_length, overlap_length))
   end
 
-  defnp stft_n(data, window, sampling_frequency, opts \\ []) do
+  defnp stft_n(data, window, sampling_rate, opts \\ []) do
     {frame_length} = Nx.shape(window)
     padding = opts[:window_padding]
     fft_length = opts[:fft_length]
@@ -82,10 +81,10 @@ defmodule NxSignal do
 
     {num_frames, fft_length} = Nx.shape(spectrum)
 
-    frequencies = fft_frequencies(sampling_frequency, fft_length: fft_length)
+    frequencies = fft_frequencies(sampling_rate, fft_length: fft_length)
 
     # assign the middle of the equivalent time window as the time for the given frame
-    time_step = frame_length / (2 * sampling_frequency)
+    time_step = frame_length / (2 * sampling_rate)
     last_frame = time_step * num_frames
     times = Nx.linspace(time_step, last_frame, n: num_frames, name: :frames)
 
@@ -97,7 +96,7 @@ defmodule NxSignal do
 
   ## Arguments
 
-    * `sampling_frequency` - Sampling frequency in Hz.
+    * `sampling_rate` - Sampling frequency in Hz.
 
   ## Options
 
@@ -113,11 +112,11 @@ defmodule NxSignal do
         [0.0, 1.6e3, 3.2e3, 4.8e3, 6.4e3, 8.0e3, 9.6e3, 1.12e4, 1.28e4, 1.44e4]
       >
   """
-  defn fft_frequencies(sampling_frequency, opts \\ []) do
+  defn fft_frequencies(sampling_rate, opts \\ []) do
     opts = keyword!(opts, [:fft_length, type: {:f, 32}, name: :frequencies, endpoint: false])
     fft_length = opts[:fft_length]
 
-    step = sampling_frequency / fft_length
+    step = sampling_rate / fft_length
 
     Nx.linspace(0, step * fft_length,
       n: fft_length,
@@ -145,7 +144,7 @@ defmodule NxSignal do
       ...>   [3, -1],
       ...>   [5, -1]
       ...> ])
-      iex> NxSignal.istft(z, NxSignal.Windows.rectangular(n: 2), overlap_length: 1, fft_length: 2, sampling_frequency: 400)
+      iex> NxSignal.istft(z, NxSignal.Windows.rectangular(n: 2), overlap_length: 1, fft_length: 2, sampling_rate: 400)
       #Nx.Tensor<
         c64[frames: 3][samples: 2]
         [
@@ -523,7 +522,7 @@ defmodule NxSignal do
 
     * `fft_length` - Number of FFT bins
     * `mel_bins` - Number of target MEL bins
-    * `sampling_frequency` - Sampling frequency in Hz
+    * `sampling_rate` - Sampling frequency in Hz
 
   ## Options
     * `:max_mel` - the pitch for the last MEL bin before log scaling. Defaults to 3016
@@ -544,7 +543,7 @@ defmodule NxSignal do
         ]
       >
   """
-  deftransform mel_filters(fft_length, mel_bins, sampling_frequency, opts \\ []) do
+  deftransform mel_filters(fft_length, mel_bins, sampling_rate, opts \\ []) do
     opts =
       Keyword.validate!(opts,
         max_mel: 3016,
@@ -552,19 +551,19 @@ defmodule NxSignal do
         type: {:f, 32}
       )
 
-    mel_filters_n(sampling_frequency, opts[:max_mel], opts[:mel_frequency_spacing],
+    mel_filters_n(sampling_rate, opts[:max_mel], opts[:mel_frequency_spacing],
       type: opts[:type],
       fft_length: fft_length,
       mel_bins: mel_bins
     )
   end
 
-  defnp mel_filters_n(sampling_frequency, max_mel, f_sp, opts \\ []) do
+  defnp mel_filters_n(sampling_rate, max_mel, f_sp, opts \\ []) do
     fft_length = opts[:fft_length]
     mel_bins = opts[:mel_bins]
     type = opts[:type]
 
-    fftfreqs = fft_frequencies(sampling_frequency, type: type, fft_length: fft_length)
+    fftfreqs = fft_frequencies(sampling_rate, type: type, fft_length: fft_length)
 
     mels = Nx.linspace(0, max_mel / f_sp, type: type, n: mel_bins + 2, name: :mels)
     freqs = f_sp * mels
@@ -601,7 +600,7 @@ defmodule NxSignal do
 
   ## Arguments
     * `z` - STFT spectrum
-    * `sampling_frequency` - Sampling frequency in Hz
+    * `sampling_rate` - Sampling frequency in Hz
 
   ## Options
 
@@ -612,13 +611,13 @@ defmodule NxSignal do
   ## Examples
 
       iex> fft_length = 16
-      iex> sampling_frequency = 8.0e3
-      iex> {z, _, _} = NxSignal.stft(Nx.iota({10}), NxSignal.Windows.hann(n: 4), overlap_length: 2, fft_length: fft_length, sampling_frequency: sampling_frequency, window_padding: :reflect)
+      iex> sampling_rate = 8.0e3
+      iex> {z, _, _} = NxSignal.stft(Nx.iota({10}), NxSignal.Windows.hann(n: 4), overlap_length: 2, fft_length: fft_length, sampling_rate: sampling_rate, window_padding: :reflect)
       iex> Nx.axis_size(z, :frequencies)
       16
       iex> Nx.axis_size(z, :frames)
       5
-      iex> NxSignal.stft_to_mel(z, sampling_frequency, fft_length: fft_length, mel_bins: 4)
+      iex> NxSignal.stft_to_mel(z, sampling_rate, fft_length: fft_length, mel_bins: 4)
       #Nx.Tensor<
         f32[frames: 5][mel: 4]
         [
@@ -630,14 +629,14 @@ defmodule NxSignal do
         ]
       >
   """
-  defn stft_to_mel(z, sampling_frequency, opts \\ []) do
+  defn stft_to_mel(z, sampling_rate, opts \\ []) do
     opts =
       keyword!(opts, [:fft_length, :mel_bins, :max_mel, :mel_frequency_spacing, type: {:f, 32}])
 
     magnitudes = Nx.abs(z) ** 2
 
     filters =
-      mel_filters(opts[:fft_length], opts[:mel_bins], sampling_frequency, mel_filters_opts(opts))
+      mel_filters(opts[:fft_length], opts[:mel_bins], sampling_rate, mel_filters_opts(opts))
 
     freq_size = div(opts[:fft_length], 2)
 
