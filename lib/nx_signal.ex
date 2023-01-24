@@ -228,6 +228,18 @@ defmodule NxSignal do
           [3, 4, 5, 6, 5, 4]
         ]
       >
+
+      iex> NxSignal.as_windowed(Nx.iota({10}), window_length: 6, padding: :reflect, stride: 2)
+      #Nx.Tensor<
+        s64[5][6]
+        [
+          [1, 2, 1, 0, 1, 2],
+          [1, 0, 1, 2, 3, 4],
+          [1, 2, 3, 4, 5, 6],
+          [3, 4, 5, 6, 7, 8],
+          [5, 6, 7, 8, 9, 8]
+        ]
+      >
   """
   deftransform as_windowed(tensor, opts \\ []) do
     if opts[:padding] == :reflect do
@@ -350,6 +362,10 @@ defmodule NxSignal do
       Nx.concatenate([Nx.broadcast(0, {window_length, 1}), Nx.iota({window_length, 1})], axis: 1)
 
     leading_window_indices = generate_leading_window_indices(window_length, stride)
+
+    trailing_window_indices =
+      generate_trailing_window_indices(Nx.size(tensor), window_length, stride)
+
     half_window = div(window_length - 1, 2) + 1
 
     {output, _, _, _, _} =
@@ -368,10 +384,19 @@ defmodule NxSignal do
 
             {updated, i + stride, current_window + 1, t, index_template}
 
+          i > Nx.size(t) - half_window ->
+            # We're indexing after the last full window on the right
+            window = Nx.take(t, trailing_window_indices[i - (Nx.size(t) - half_window + 1)])
+
+            indices = index_template + Nx.stack([current_window, 0])
+            updated = Nx.indexed_add(output, indices, window)
+
+            {updated, i + stride, current_window + 1, t, index_template}
+
           true ->
             # Case where we can index a full window
             indices = index_template + Nx.stack([current_window, 0])
-            updates = t |> Nx.slice([i - div(window_length, 2)], [window_length]) |> Nx.flatten()
+            updates = t |> Nx.slice([i - half_window], [window_length]) |> Nx.flatten()
 
             updated = Nx.indexed_add(output, indices, updates)
 
@@ -383,60 +408,36 @@ defmodule NxSignal do
     # since they are currently all the same value. We want to apply the tapering-off
     # like we did with the initial windows.
 
-    apply_right_padding(output)
+    output
   end
 
   deftransformp generate_leading_window_indices(window_length, stride) do
     half_window = div(window_length, 2)
 
     for offset <- 0..half_window//stride do
-      {offset + half_window}
+      partial_length = offset + half_window
+      padding_length = window_length - partial_length
+
+      {partial_length}
       |> Nx.iota()
-      |> pad_reflect(window_length)
+      |> Nx.reflect(padding_config: [{padding_length, 0}])
     end
     |> Nx.stack()
   end
 
-  defnp apply_right_padding(output) do
-    offsets =
-      (output[-1] == output) |> Nx.all(axes: [1], keep_axes: true) |> Nx.cumulative_sum(axis: 0)
+  deftransformp generate_trailing_window_indices(tensor_size, window_length, stride) do
+    min_index = tensor_size - window_length + 1
 
-    idx = Nx.iota(Nx.shape(output), axis: 1) + Nx.select(offsets != 0, offsets - 1, 0)
+    for {offset, add} <- Enum.with_index(min_index..(tensor_size - 1)//stride) do
+      partial_length = tensor_size - offset
+      padding_length = window_length - partial_length
 
-    [output, Nx.reverse(output[[0..-1//1, 0..-2//1]], axes: [1])]
-    |> Nx.concatenate(axis: 1)
-    |> Nx.take_along_axis(idx, axis: 1)
-  end
-
-  defnp pad_reflect(window, target_size) do
-    case Nx.shape(window) do
-      {^target_size} ->
-        window
-
-      {n} ->
-        pad_length = target_size - n
-
-        period =
-          case pad_length do
-            1 ->
-              Nx.tensor([1])
-
-            2 ->
-              Nx.tensor([1, 2]) |> Nx.remainder(n)
-
-            _ ->
-              Nx.concatenate([
-                Nx.iota({n - 1})[1..-1//1],
-                (n - Nx.iota({n})) |> Nx.slice([1], [n - 1]),
-                Nx.tensor([0])
-              ])
-          end
-
-        idx = Nx.iota({pad_length}) |> Nx.remainder(2 * n - 2)
-        pad = window |> Nx.take(Nx.take(period, idx)) |> Nx.reverse()
-
-        Nx.concatenate([pad, window])
+      {partial_length}
+      |> Nx.iota()
+      |> Nx.add(min_index + add - rem(window_length, 2))
+      |> Nx.reflect(padding_config: [{0, padding_length}])
     end
+    |> Nx.stack()
   end
 
   @doc """
