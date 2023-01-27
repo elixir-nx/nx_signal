@@ -15,7 +15,7 @@ defmodule NxSignal do
 
     * $k$: length of the Discrete Fourier Transform (DFT)
     * $N$: length of each frame
-    * $H$: hop (in samples) between frames (calculated as $h = N - \text{overlap_length}$)
+    * $H$: hop (in samples) between frames (calculated as $H = N - \text{overlap\\_length}$)
     * $M$: number of frames
     * $x[n]$: the input time-domain signal
     * $w[n]$: the window function to be applied to each frame
@@ -37,8 +37,8 @@ defmodule NxSignal do
       Defaults to half the window size.
     * `:window_padding` - `:reflect`, `:zeros` or `nil`. See `as_windowed/3` for more details.
     * `:scaling` - `nil`, `:spectrum` or `:psd`.
-      * `nil` - No scaling is applied.
       * `:spectrum` - each frame is divided by $\sum_{i} window[i]$.
+      * `nil` - No scaling is applied.
       * `:psd` - each frame is divided by $\sqrt{F\_s\sum_{i} window[i]^2}$.
 
   ## Examples
@@ -607,8 +607,8 @@ defmodule NxSignal do
       Defaults to half the window size.
     * `:sampling_rate` - the sampling rate $F_s$ in Hz. Defaults to `1000`.
     * `:scaling` - `nil`, `:spectrum` or `:psd`.
-      * `nil` - No scaling is applied.
       * `:spectrum` - each frame is multiplied by $\sum_{i} window[i]$.
+      * `nil` - No scaling is applied.
       * `:psd` - each frame is multiplied by $\sqrt{F\_s\sum_{i} window[i]^2}$.
 
   ## Examples
