@@ -145,44 +145,6 @@ defmodule NxSignal do
   end
 
   @doc """
-  Computes the Inverse Short-Time Fourier Transform of a tensor.
-
-  Returns a tensor of M time-domain frames of length `fft_length`.
-
-  See also: `NxSignal.Windows`, `Nx.Signal.stft`
-
-  ## Options
-
-    * `:fft_length` - the DFT length that will be passed to `Nx.fft/2`. Defaults to `:power_of_two`.
-
-  ## Examples
-
-      iex> z = Nx.tensor([
-      ...>   [1, -1],
-      ...>   [3, -1],
-      ...>   [5, -1]
-      ...> ])
-      iex> NxSignal.istft(z, NxSignal.Windows.rectangular(n: 2), overlap_length: 1, fft_length: 2, sampling_rate: 400)
-      #Nx.Tensor<
-        c64[frames: 3][samples: 2]
-        [
-          [0.0+0.0i, 1.0+0.0i],
-          [1.0+0.0i, 2.0+0.0i],
-          [2.0+0.0i, 3.0+0.0i]
-        ]
-      >
-  """
-  @doc type: :time_frequency
-  defn istft(data, window, opts \\ []) do
-    frames =
-      data
-      |> Nx.ifft(length: opts[:fft_length])
-      |> Nx.multiply(window)
-
-    Nx.reshape(frames, frames.shape, names: [:frames, :samples])
-  end
-
-  @doc """
   Returns a tensor of K windows of length N
 
   ## Options
@@ -458,75 +420,6 @@ defmodule NxSignal do
       |> Nx.reflect(padding_config: [{0, padding_length}])
     end
     |> Nx.stack()
-  end
-
-  @doc """
-  Performs the overlap-and-add algorithm over
-  an M by N tensor, where M is the number of
-  windows and N is the window size.
-
-  The tensor is zero-padded on the right so
-  the last window fully appears in the result.
-
-  ## Options
-
-    * `:overlap_length` - The number of overlapping samples between windows
-
-  ## Examples
-
-      iex> NxSignal.overlap_and_add(Nx.iota({3, 4}), overlap_length: 0)
-      #Nx.Tensor<
-        s64[12]
-        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
-      >
-
-      iex> NxSignal.overlap_and_add(Nx.iota({3, 4}), overlap_length: 3)
-      #Nx.Tensor<
-        s64[6]
-        [0, 5, 15, 18, 17, 11]
-      >
-
-  """
-  @doc type: :windowing
-  defn overlap_and_add(tensor, opts \\ []) do
-    opts = keyword!(opts, [:overlap_length])
-
-    {num_windows, window_length} = Nx.shape(tensor)
-    overlap_length = opts[:overlap_length]
-
-    if overlap_length >= window_length do
-      raise ArgumentError,
-            "overlap_length must be a number less than the window size #{window_length}, got: #{inspect(window_length)}"
-    end
-
-    stride = window_length - overlap_length
-
-    output_holder_shape = {num_windows * stride + overlap_length}
-
-    {output, _, _, _, _, _} =
-      while {
-              out = Nx.broadcast(0, output_holder_shape),
-              tensor,
-              i = 0,
-              idx_template = Nx.iota({window_length, 1}),
-              stride,
-              num_windows
-            },
-            i < num_windows do
-        current_window = tensor[i]
-        idx = idx_template + i * stride
-
-        {
-          Nx.indexed_add(out, idx, current_window),
-          tensor,
-          i + 1,
-          idx_template,
-          stride,
-          num_windows
-        }
-      end
-
-    output
   end
 
   @doc """
