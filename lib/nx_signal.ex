@@ -44,6 +44,7 @@ defmodule NxSignal do
         [0.0, 200.0]
       >
   """
+  @doc type: :time_frequency
   deftransform stft(data, window, opts \\ []) do
     {frame_length} = Nx.shape(window)
 
@@ -112,6 +113,7 @@ defmodule NxSignal do
         [0.0, 1.6e3, 3.2e3, 4.8e3, 6.4e3, 8.0e3, 9.6e3, 1.12e4, 1.28e4, 1.44e4]
       >
   """
+  @doc type: :time_frequency
   defn fft_frequencies(sampling_rate, opts \\ []) do
     opts = keyword!(opts, [:fft_length, type: {:f, 32}, name: :frequencies, endpoint: false])
     fft_length = opts[:fft_length]
@@ -154,6 +156,7 @@ defmodule NxSignal do
         ]
       >
   """
+  @doc type: :time_frequency
   defn istft(data, window, opts \\ []) do
     frames =
       data
@@ -241,6 +244,7 @@ defmodule NxSignal do
         ]
       >
   """
+  @doc type: :windowing
   deftransform as_windowed(tensor, opts \\ []) do
     if opts[:padding] == :reflect do
       as_windowed_reflect_padding(tensor, opts)
@@ -467,6 +471,7 @@ defmodule NxSignal do
       >
 
   """
+  @doc type: :windowing
   defn overlap_and_add(tensor, opts \\ []) do
     {stride, num_windows, window_length, output_holder_shape} =
       transform({tensor, opts}, fn {tensor, opts} ->
@@ -544,6 +549,7 @@ defmodule NxSignal do
         ]
       >
   """
+  @doc type: :time_frequency
   deftransform mel_filters(fft_length, mel_bins, sampling_rate, opts \\ []) do
     opts =
       Keyword.validate!(opts,
@@ -630,6 +636,7 @@ defmodule NxSignal do
         ]
       >
   """
+  @doc type: :time_frequency
   defn stft_to_mel(z, sampling_rate, opts \\ []) do
     opts =
       keyword!(opts, [:fft_length, :mel_bins, :max_mel, :mel_frequency_spacing, type: {:f, 32}])

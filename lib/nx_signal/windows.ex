@@ -1,6 +1,6 @@
 defmodule NxSignal.Windows do
   @moduledoc """
-  Definitions for common window functions
+  Common window functions
   """
   import Nx.Defn
 
@@ -11,12 +11,30 @@ defmodule NxSignal.Windows do
 
   Useful for when no window function should be applied.
 
-  Expects `:n`, the window length, to be passed as an option.
-  Also accepts the same options as `Nx.broadcast`.
+  ## Options
+
+    * `:n` - the window length
+    * `:type` - the output type. Defaults to `s64`
+
+  ## Examples
+
+      iex> NxSignal.Windows.rectangular(n: 5)
+      #Nx.Tensor<
+        s64[5]
+        [1, 1, 1, 1, 1]
+      >
+
+      iex> NxSignal.Windows.rectangular(n: 5, type: :f32)
+      #Nx.Tensor<
+        f32[5]
+        [1.0, 1.0, 1.0, 1.0, 1.0]
+      >
   """
+  @doc type: :windowing
   defn rectangular(opts \\ []) do
+    opts = keyword!(opts, [:n, type: :s64])
     {n, opts} = pop_window_size(opts)
-    Nx.broadcast(1, {n}, opts)
+    Nx.broadcast(Nx.tensor(1, type: opts[:type]), {n})
   end
 
   @doc """
@@ -38,6 +56,7 @@ defmodule NxSignal.Windows do
         [0.0, 0.6666666865348816, 0.6666666269302368]
       >
   """
+  @doc type: :windowing
   defn bartlett(opts \\ []) do
     opts = keyword!(opts, [:n, :name, type: {:f, 32}])
     {n, opts} = pop_window_size(opts)
@@ -74,6 +93,7 @@ defmodule NxSignal.Windows do
         [0.5, 1.0, 0.5]
       >
   """
+  @doc type: :windowing
   defn triangular(opts \\ []) do
     opts = keyword!(opts, [:n, :name, type: {:f, 32}])
     {n, opts} = pop_window_size(opts)
@@ -132,6 +152,7 @@ defmodule NxSignal.Windows do
         [-1.4901161193847656e-8, 0.12999999523162842, 0.6299999952316284, 0.9999999403953552, 0.6299999952316284, 0.12999999523162842]
       >
   """
+  @doc type: :windowing
   defn blackman(opts \\ []) do
     opts = keyword!(opts, [:n, :name, is_periodic: true, type: {:f, 32}])
     {l, opts} = pop_window_size(opts)
@@ -192,6 +213,7 @@ defmodule NxSignal.Windows do
         [0.08000001311302185, 0.5400000214576721, 1.0, 0.5400000214576721, 0.08000001311302185]
       >
   """
+  @doc type: :windowing
   defn hamming(opts \\ []) do
     opts = keyword!(opts, [:n, :name, is_periodic: true, type: {:f, 32}])
     {l, opts} = pop_window_size(opts)
@@ -241,6 +263,7 @@ defmodule NxSignal.Windows do
         [0.0, 0.34549152851104736, 0.9045085310935974, 0.9045084714889526, 0.3454914391040802]
       >
   """
+  @doc type: :windowing
   defn hann(opts \\ []) do
     opts = keyword!(opts, [:n, :name, is_periodic: true, type: {:f, 32}])
     {l, opts} = pop_window_size(opts)
