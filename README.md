@@ -2,9 +2,6 @@
 
 DSP (Digital Signal Processing) with [Nx](https://github.com/elixir-nx/nx)
 
-> :warning: `NxSignal` is still in experimental stages. It is incomplete and poorly documented.
-> Use at your own risk.
-
 ## Why NxSignal?
 
 This library comes from the author's urge to experiment with audio processing in Elixir through Nx.
@@ -20,7 +17,7 @@ to your Mix project:
 ```elixir
 def deps do
   [
-    {:nx_signal, "~> 0.1", github: "polvalente/nx-signal", branch: "main"}
+    {:nx_signal, "~> 0.5"}
   ]
 end
 ```
@@ -29,7 +26,7 @@ You can also use `Mix.install` for standalone development:
 
 ```elixir
 Mix.install([
-    {:nx_signal, "~> 0.1", github: "polvalente/nx-signal", branch: "main"}
+    {:nx_signal, "~> 0.5"}
 ])
 ```
 
@@ -50,4 +47,22 @@ feature beforehand.
 
 ## Roadmap
 
-To be added
+The main goal of this library is to mirror the functionality provided by [scipy.signal](https://docs.scipy.org/doc/scipy/reference/signal.html)
+However, some of those overlap with [Scholar](https://github.com/elixir-nx/scholar).
+
+With that in mind, we still have the following sections to implement:
+
+- [ ] Convolution
+- [x] B-Splines (pertains to Scholar)
+- [ ] Filtering
+- [ ] Filter Design
+- [ ] Matlab-style IIR filter design
+- [ ] Continuous-time linear systems
+- [ ] Discrete-time linear systems
+- [ ] LTI Representations
+- [ ] Waveforms
+- [x] Window functions (some of the most common are implemented, others are welcome)
+- [ ] Wavelets
+- [ ] Peak finding
+- [ ] Spectral analysis
+- [ ] Chirp Z-Transform and Zoom FFT
