@@ -2,9 +2,6 @@
 
 DSP (Digital Signal Processing) with [Nx](https://github.com/elixir-nx/nx)
 
-> :warning: `NxSignal` is still in experimental stages. It is incomplete and poorly documented.
-> Use at your own risk.
-
 ## Why NxSignal?
 
 This library comes from the author's urge to experiment with audio processing in Elixir through Nx.
@@ -20,7 +17,7 @@ to your Mix project:
 ```elixir
 def deps do
   [
-    {:nx_signal, "~> 0.1", github: "polvalente/nx-signal", branch: "main"}
+    {:nx_signal, "~> 0.5"}
   ]
 end
 ```
@@ -29,7 +26,7 @@ You can also use `Mix.install` for standalone development:
 
 ```elixir
 Mix.install([
-    {:nx_signal, "~> 0.1", github: "polvalente/nx-signal", branch: "main"}
+    {:nx_signal, "~> 0.5"}
 ])
 ```
 
