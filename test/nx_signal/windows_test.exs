@@ -1,4 +1,4 @@
 defmodule NxSignal.WindowsTest do
-  use ExUnit.Case
+  use NxSignal.Case
   doctest NxSignal.Windows
 end

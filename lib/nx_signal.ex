@@ -5,13 +5,29 @@ defmodule NxSignal do
 
   import Nx.Defn
 
-  @doc """
+  @doc ~S"""
   Computes the Short-Time Fourier Transform of a tensor.
 
   Returns the complex spectrum Z, the time in seconds for
   each frame and the frequency bins in Hz.
 
-  See also: `NxSignal.Windows`, `Nx.Signal.istft`
+  The STFT is parameterized through:
+
+    * $k$: length of the Discrete Fourier Transform (DFT)
+    * $N$: length of each frame
+    * $H$: hop (in samples) between frames (calculated as $h = N - \text{overlap_length}$)
+    * $M$: number of frames
+    * $x[n]$: the input time-domain signal
+    * $w[n]$: the window function to be applied to each frame
+
+  $$
+  DFT(x, w) := \sum_{n=0}^{N - 1} x[n]w[n]e^\frac{-2 \pi i k n}{N} \\\\
+  X[m, k] = DFT(x[mH..(mH + N - 1)], w)
+  $$
+
+  where $m$ assumes all values in the interval $[0, M - 1]$
+
+  See also: `NxSignal.Windows`, `istft/3`
 
   ## Options
 
@@ -44,6 +60,7 @@ defmodule NxSignal do
         [0.0, 200.0]
       >
   """
+  @doc type: :time_frequency
   deftransform stft(data, window, opts \\ []) do
     {frame_length} = Nx.shape(window)
 
@@ -112,6 +129,7 @@ defmodule NxSignal do
         [0.0, 1.6e3, 3.2e3, 4.8e3, 6.4e3, 8.0e3, 9.6e3, 1.12e4, 1.28e4, 1.44e4]
       >
   """
+  @doc type: :time_frequency
   defn fft_frequencies(sampling_rate, opts \\ []) do
     opts = keyword!(opts, [:fft_length, type: {:f, 32}, name: :frequencies, endpoint: false])
     fft_length = opts[:fft_length]
@@ -127,50 +145,13 @@ defmodule NxSignal do
   end
 
   @doc """
-  Computes the Inverse Short-Time Fourier Transform of a tensor.
-
-  Returns a tensor of M time-domain frames of length `fft_length`.
-
-  See also: `NxSignal.Windows`, `Nx.Signal.stft`
-
-  ## Options
-
-    * `:fft_length` - the DFT length that will be passed to `Nx.fft/2`. Defaults to `:power_of_two`.
-
-  ## Examples
-
-      iex> z = Nx.tensor([
-      ...>   [1, -1],
-      ...>   [3, -1],
-      ...>   [5, -1]
-      ...> ])
-      iex> NxSignal.istft(z, NxSignal.Windows.rectangular(n: 2), overlap_length: 1, fft_length: 2, sampling_rate: 400)
-      #Nx.Tensor<
-        c64[frames: 3][samples: 2]
-        [
-          [0.0+0.0i, 1.0+0.0i],
-          [1.0+0.0i, 2.0+0.0i],
-          [2.0+0.0i, 3.0+0.0i]
-        ]
-      >
-  """
-  defn istft(data, window, opts \\ []) do
-    frames =
-      data
-      |> Nx.ifft(length: opts[:fft_length])
-      |> Nx.multiply(window)
-
-    Nx.reshape(frames, frames.shape, names: [:frames, :samples])
-  end
-
-  @doc """
   Returns a tensor of K windows of length N
 
   ## Options
 
     * `:window_length` - the number of samples in a window
     * `:stride` - The number of samples to skip between windows. Defaults to `1`.
-    * `:padding` - A can be `:reflect` or a  valid padding as per `Nx.Shape.pad/2` over the
+    * `:padding` - A can be `:reflect` or a valid padding as per `Nx.Shape.pad/2` over the
       input tensor's shape. Defaults to `:valid`. If `:reflect` or `:zeros`, the first window will be centered
       at the start of the signal. For `:reflect`, each incomplete window will be reflected as if it was
       periodic (see examples for `as_windowed/2`). For `:zeros`, each incomplete window will be zero-padded.
@@ -241,6 +222,7 @@ defmodule NxSignal do
         ]
       >
   """
+  @doc type: :windowing
   deftransform as_windowed(tensor, opts \\ []) do
     if opts[:padding] == :reflect do
       as_windowed_reflect_padding(tensor, opts)
@@ -441,80 +423,6 @@ defmodule NxSignal do
   end
 
   @doc """
-  Performs the overlap-and-add algorithm over
-  an M by N tensor, where M is the number of
-  windows and N is the window size.
-
-  The tensor is zero-padded on the right so
-  the last window fully appears in the result.
-
-  ## Options
-
-    * `:overlap_length` - The number of overlapping samples between windows
-
-  ## Examples
-
-      iex> NxSignal.overlap_and_add(Nx.iota({3, 4}), overlap_length: 0)
-      #Nx.Tensor<
-        s64[12]
-        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
-      >
-
-      iex> NxSignal.overlap_and_add(Nx.iota({3, 4}), overlap_length: 3)
-      #Nx.Tensor<
-        s64[6]
-        [0, 5, 15, 18, 17, 11]
-      >
-
-  """
-  defn overlap_and_add(tensor, opts \\ []) do
-    {stride, num_windows, window_length, output_holder_shape} =
-      transform({tensor, opts}, fn {tensor, opts} ->
-        import Nx.Defn.Kernel, only: []
-        import Elixir.Kernel
-
-        {num_windows, window_length} = Nx.shape(tensor)
-        overlap_length = opts[:overlap_length]
-
-        unless is_number(overlap_length) and overlap_length < window_length do
-          raise ArgumentError,
-                "overlap_length must be a number less than the window size #{window_length}, got: #{inspect(window_length)}"
-        end
-
-        stride = window_length - overlap_length
-
-        output_holder_shape = {num_windows * stride + overlap_length}
-
-        {stride, num_windows, window_length, output_holder_shape}
-      end)
-
-    {output, _, _, _, _, _} =
-      while {
-              out = Nx.broadcast(0, output_holder_shape),
-              tensor,
-              i = 0,
-              idx_template = Nx.iota({window_length, 1}),
-              stride,
-              num_windows
-            },
-            i < num_windows do
-        current_window = tensor[i]
-        idx = idx_template + i * stride
-
-        {
-          Nx.indexed_add(out, idx, current_window),
-          tensor,
-          i + 1,
-          idx_template,
-          stride,
-          num_windows
-        }
-      end
-
-    output
-  end
-
-  @doc """
   Generates weights for converting an STFT representation into MEL-scale.
 
   See also: `stft/3`, `istft/3`, `stft_to_mel/2`
@@ -544,6 +452,7 @@ defmodule NxSignal do
         ]
       >
   """
+  @doc type: :time_frequency
   deftransform mel_filters(fft_length, mel_bins, sampling_rate, opts \\ []) do
     opts =
       Keyword.validate!(opts,
@@ -600,6 +509,7 @@ defmodule NxSignal do
   See also: `stft/3`, `istft/3`, `mel_filters/1`
 
   ## Arguments
+
     * `z` - STFT spectrum
     * `sampling_rate` - Sampling frequency in Hz
 
@@ -630,6 +540,7 @@ defmodule NxSignal do
         ]
       >
   """
+  @doc type: :time_frequency
   defn stft_to_mel(z, sampling_rate, opts \\ []) do
     opts =
       keyword!(opts, [:fft_length, :mel_bins, :max_mel, :mel_frequency_spacing, type: {:f, 32}])
