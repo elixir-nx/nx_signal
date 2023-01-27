@@ -15,7 +15,7 @@ defmodule NxSignal do
 
     * $k$: length of the Discrete Fourier Transform (DFT)
     * $N$: length of each frame
-    * $H$: hop (in samples) between frames (calculated as $h = N - \text{overlap_length}$)
+    * $H$: hop (in samples) between frames (calculated as $H = N - \text{overlap\\_length}$)
     * $M$: number of frames
     * $x[n]$: the input time-domain signal
     * $w[n]$: the window function to be applied to each frame
@@ -31,11 +31,15 @@ defmodule NxSignal do
 
   ## Options
 
-    * `:sampling_rate` - the sampling frequency for the input in Hz. Defaults to `1000`.
+    * `:sampling_rate` - the sampling frequency $F_s$ for the input in Hz. Defaults to `1000`.
     * `:fft_length` - the DFT length that will be passed to `Nx.fft/2`. Defaults to `:power_of_two`.
     * `:overlap_length` - the number of samples for the overlap between frames.
-    Defaults to `div(frame_length, 2)`.
+      Defaults to half the window size.
     * `:window_padding` - `:reflect`, `:zeros` or `nil`. See `as_windowed/3` for more details.
+    * `:scaling` - `nil`, `:spectrum` or `:psd`.
+      * `:spectrum` - each frame is divided by $\sum_{i} window[i]$.
+      * `nil` - No scaling is applied.
+      * `:psd` - each frame is divided by $\sqrt{F\_s\sum_{i} window[i]^2}$.
 
   ## Examples
 
@@ -68,6 +72,7 @@ defmodule NxSignal do
       Keyword.validate!(opts, [
         :overlap_length,
         :window,
+        :scaling,
         window_padding: :valid,
         sampling_rate: 100,
         fft_length: :power_of_two
@@ -105,7 +110,23 @@ defmodule NxSignal do
     last_frame = time_step * num_frames
     times = Nx.linspace(time_step, last_frame, n: num_frames, name: :frames)
 
-    {Nx.reshape(spectrum, spectrum.shape, names: [:frames, :frequencies]), times, frequencies}
+    output =
+      case opts[:scaling] do
+        :spectrum ->
+          spectrum / Nx.sum(window)
+
+        :psd ->
+          spectrum / Nx.sqrt(sampling_rate * Nx.sum(window ** 2))
+
+        nil ->
+          spectrum
+
+        scaling ->
+          raise ArgumentError,
+                "invalid :scaling, expected one of :spectrum, :psd or nil, got: #{inspect(scaling)}"
+      end
+
+    {Nx.reshape(output, spectrum.shape, names: [:frames, :frequencies]), times, frequencies}
   end
 
   @doc """
@@ -151,7 +172,7 @@ defmodule NxSignal do
 
     * `:window_length` - the number of samples in a window
     * `:stride` - The number of samples to skip between windows. Defaults to `1`.
-    * `:padding` - A can be `:reflect` or a valid padding as per `Nx.Shape.pad/2` over the
+    * `:padding` - A can be `:reflect` or a valid padding as per `Nx.pad/3` over the
       input tensor's shape. Defaults to `:valid`. If `:reflect` or `:zeros`, the first window will be centered
       at the start of the signal. For `:reflect`, each incomplete window will be reflected as if it was
       periodic (see examples for `as_windowed/2`). For `:zeros`, each incomplete window will be zero-padded.
@@ -572,5 +593,200 @@ defmodule NxSignal do
 
   deftransformp mel_filters_opts(opts) do
     Keyword.take(opts, [:max_mel, :mel_frequency_spacing, :type])
+  end
+
+  @doc """
+  Computes the Inverse Short-Time Fourier Transform of a tensor.
+  Returns a tensor of M time-domain frames of length `fft_length`.
+  See also: `NxSignal.Windows`, `Nx.Signal.stft`
+
+  ## Options
+
+    * `:fft_length` - the DFT length that will be passed to `Nx.fft/2`. Defaults to `:power_of_two`.
+    * `:overlap_length` - the number of samples for the overlap between frames.
+      Defaults to half the window size.
+    * `:sampling_rate` - the sampling rate $F_s$ in Hz. Defaults to `1000`.
+    * `:scaling` - `nil`, `:spectrum` or `:psd`.
+      * `:spectrum` - each frame is multiplied by $\sum_{i} window[i]$.
+      * `nil` - No scaling is applied.
+      * `:psd` - each frame is multiplied by $\sqrt{F\_s\sum_{i} window[i]^2}$.
+
+  ## Examples
+
+  In general, `istft/3` takes in the same parameters and window as the `stft/3` that generated the spectrum.
+  In the first example, we can notice that the reconstruction is mostly perfect, aside from the first sample.
+
+  This is because the Hann window only ensures perfect reconstruction in overlapping regions, so the edges
+  of the signal end up being distorted.
+
+      iex> t = Nx.tensor([10, 10, 1, 0, 10, 10, 2, 20])
+      iex> w = NxSignal.Windows.hann(n: 4)
+      iex> opts = [sampling_rate: 1, fft_length: 4]
+      iex> {z, _time, _freqs} = NxSignal.stft(t, w, opts)
+      iex> result = NxSignal.istft(z, w, opts)
+      iex> Nx.as_type(result, Nx.type(t))
+      #Nx.Tensor<
+        s64[8]
+        [0, 10, 1, 0, 10, 10, 2, 20]
+      >
+
+  Different scaling options are available (see `stft/3` for a more detailed explanation).
+  For perfect reconstruction, you want to use the same scaling as the STFT:
+
+      iex> t = Nx.tensor([10, 10, 1, 0, 10, 10, 2, 20])
+      iex> w = NxSignal.Windows.hann(n: 4)
+      iex> opts = [scaling: :spectrum, sampling_rate: 1, fft_length: 4]
+      iex> {z, _time, _freqs} = NxSignal.stft(t, w, opts)
+      iex> result = NxSignal.istft(z, w, opts)
+      iex> Nx.as_type(result, Nx.type(t))
+      #Nx.Tensor<
+        s64[8]
+        [0, 10, 1, 0, 10, 10, 2, 20]
+      >
+
+      iex> t = Nx.tensor([10, 10, 1, 0, 10, 10, 2, 20], type: :f32)
+      iex> w = NxSignal.Windows.hann(n: 4)
+      iex> opts = [scaling: :psd, sampling_rate: 1, fft_length: 4]
+      iex> {z, _time, _freqs} = NxSignal.stft(t, w, opts)
+      iex> result = NxSignal.istft(z, w, opts)
+      iex> Nx.as_type(result, Nx.type(t))
+      #Nx.Tensor<
+        f32[8]
+        [0.0, 10.0, 0.9999999403953552, -2.1900146407460852e-7, 10.0, 10.0, 2.000000238418579, 20.0]
+      >
+  """
+  @doc type: :time_frequency
+  defn istft(data, window, opts) do
+    opts = keyword!(opts, [:fft_length, :overlap_length, :scaling, sampling_rate: 1000])
+
+    fft_length =
+      case opts[:fft_length] do
+        nil ->
+          :power_of_two
+
+        fft_length ->
+          fft_length
+      end
+
+    overlap_length =
+      case opts[:overlap_length] do
+        nil ->
+          div(Nx.size(window), 2)
+
+        overlap_length ->
+          overlap_length
+      end
+
+    sampling_rate =
+      case {opts[:scaling], opts[:sampling_rate]} do
+        {:psd, nil} -> raise ArgumentError, ":sampling_rate is mandatory if scaling is :psd"
+        {_, sampling_rate} -> sampling_rate
+      end
+
+    frames = Nx.ifft(data, length: fft_length)
+
+    frames_rescaled =
+      case opts[:scaling] do
+        :spectrum ->
+          frames * Nx.sum(window)
+
+        :psd ->
+          frames * Nx.sqrt(sampling_rate * Nx.sum(window ** 2))
+
+        nil ->
+          frames
+
+        scaling ->
+          raise ArgumentError,
+                "invalid :scaling, expected one of :spectrum, :psd or nil, got: #{inspect(scaling)}"
+      end
+
+    result_non_normalized =
+      overlap_and_add(frames_rescaled * window, overlap_length: overlap_length)
+
+    normalization_factor =
+      overlap_and_add(Nx.broadcast(Nx.abs(window) ** 2, data.shape),
+        overlap_length: overlap_length
+      )
+
+    normalization_factor = Nx.select(normalization_factor > 1.0e-10, normalization_factor, 1.0)
+
+    result_non_normalized / normalization_factor
+  end
+
+  @doc """
+  Performs the overlap-and-add algorithm over
+  an M by N tensor, where M is the number of
+  windows and N is the window size.
+  The tensor is zero-padded on the right so
+  the last window fully appears in the result.
+
+  ## Options
+
+    * `:overlap_length` - The number of overlapping samples between windows
+    * `:type` - output type for casting the accumulated result.
+      If not given, defaults to `Nx.Type.to_complex/1` called on the input type.
+
+  ## Examples
+      iex> NxSignal.overlap_and_add(Nx.iota({3, 4}), overlap_length: 0)
+      #Nx.Tensor<
+        s64[12]
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+      >
+      iex> NxSignal.overlap_and_add(Nx.iota({3, 4}), overlap_length: 3)
+      #Nx.Tensor<
+        s64[6]
+        [0, 5, 15, 18, 17, 11]
+      >
+  """
+  @doc type: :windowing
+  defn overlap_and_add(tensor, opts \\ []) do
+    opts = keyword!(opts, [:overlap_length])
+
+    {num_windows, window_length} = Nx.shape(tensor)
+    overlap_length = opts[:overlap_length]
+
+    if overlap_length >= window_length do
+      raise ArgumentError,
+            "overlap_length must be a number less than the window size #{window_length}, got: #{inspect(window_length)}"
+    end
+
+    stride = window_length - overlap_length
+    output_holder_shape = {num_windows * stride + overlap_length}
+
+    {output, _, _, _, _, _} =
+      while {
+              out =
+                Nx.broadcast(
+                  Nx.tensor(0, type: tensor.type),
+                  output_holder_shape
+                ),
+              tensor,
+              i = 0,
+              idx_template = Nx.iota({window_length, 1}),
+              stride,
+              num_windows
+            },
+            i < num_windows do
+        current_window = tensor[i]
+        idx = idx_template + i * stride
+
+        {
+          Nx.indexed_add(out, idx, current_window),
+          tensor,
+          i + 1,
+          idx_template,
+          stride,
+          num_windows
+        }
+      end
+
+    case opts[:type] do
+      nil ->
+        output
+
+      t ->
+        Nx.as_type(output, t)
+    end
   end
 end
