@@ -47,4 +47,22 @@ feature beforehand.
 
 ## Roadmap
 
-To be added
+The main goal of this library is to mirror the functionality provided by [scipy.signal](https://docs.scipy.org/doc/scipy/reference/signal.html)
+However, some of those overlap with [Scholar](https://github.com/elixir-nx/scholar).
+
+With that in mind, we still have the following sections to implement:
+
+- [ ] Convolution
+- [x] B-Splines (pertains to Scholar)
+- [ ] Filtering
+- [ ] Filter Design
+- [ ] Matlab-style IIR filter design
+- [ ] Continuous-time linear systems
+- [ ] Discrete-time linear systems
+- [ ] LTI Representations
+- [ ] Waveforms
+- [x] Window functions (some of the most common are implemented, others are welcome)
+- [ ] Wavelets
+- [ ] Peak finding
+- [ ] Spectral analysis
+- [ ] Chirp Z-Transform and Zoom FFT
