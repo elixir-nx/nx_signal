@@ -6,8 +6,8 @@ defmodule NxSignal.Filters do
 
   @pi :math.pi()
 
-  @doc """
-  Calculates the normalized sinc function $sinc(t) = \\frac{sin(\\pit)}{\\pit}$
+  @doc ~S"""
+  Calculates the normalized sinc function $sinc(t) = \frac{sin(\pi t)}{\pi t}$
 
   ## Examples
 

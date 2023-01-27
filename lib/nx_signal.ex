@@ -5,11 +5,27 @@ defmodule NxSignal do
 
   import Nx.Defn
 
-  @doc """
+  @doc ~S"""
   Computes the Short-Time Fourier Transform of a tensor.
 
   Returns the complex spectrum Z, the time in seconds for
   each frame and the frequency bins in Hz.
+
+  The STFT is parameterized through:
+
+    * $k$: length of the Discrete Fourier Transform (DFT)
+    * $N$: length of each frame
+    * $H$: hop (in samples) between frames (calculated as $h = N - \text{overlap_length}$)
+    * $M$: number of frames
+    * $x[n]$: the input time-domain signal
+    * $w[n]$: the window function to be applied to each frame
+
+  $$
+  DFT(x, w) := \sum_{n=0}^{N - 1} x[n]w[n]e^\frac{-2 \pi i k n}{N} \\\\
+  X[m, k] = DFT(x[mH..(mH + N - 1)], w)
+  $$
+
+  where $m$ assumes all values in the interval $[0, M - 1]$
 
   See also: `NxSignal.Windows`, `istft/3`
 
@@ -173,7 +189,7 @@ defmodule NxSignal do
 
     * `:window_length` - the number of samples in a window
     * `:stride` - The number of samples to skip between windows. Defaults to `1`.
-    * `:padding` - A can be `:reflect` or a  valid padding as per `Nx.Shape.pad/2` over the
+    * `:padding` - A can be `:reflect` or a valid padding as per `Nx.Shape.pad/2` over the
       input tensor's shape. Defaults to `:valid`. If `:reflect` or `:zeros`, the first window will be centered
       at the start of the signal. For `:reflect`, each incomplete window will be reflected as if it was
       periodic (see examples for `as_windowed/2`). For `:zeros`, each incomplete window will be zero-padded.
