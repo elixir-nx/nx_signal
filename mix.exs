@@ -1,7 +1,7 @@
 defmodule NxSignal.MixProject do
   use Mix.Project
 
-  @source_url "https://github.com/elixir-nx/nx-signal"
+  @source_url "https://github.com/elixir-nx/nx_signal"
   @version "0.5.0"
 
   def project do
