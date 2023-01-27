@@ -11,7 +11,7 @@ defmodule NxSignal do
   Returns the complex spectrum Z, the time in seconds for
   each frame and the frequency bins in Hz.
 
-  See also: `NxSignal.Windows`, `Nx.Signal.istft`
+  See also: `NxSignal.Windows`, `istft/3`
 
   ## Options
 
@@ -473,25 +473,19 @@ defmodule NxSignal do
   """
   @doc type: :windowing
   defn overlap_and_add(tensor, opts \\ []) do
-    {stride, num_windows, window_length, output_holder_shape} =
-      transform({tensor, opts}, fn {tensor, opts} ->
-        import Nx.Defn.Kernel, only: []
-        import Elixir.Kernel
+    opts = keyword!(opts, [:overlap_length])
 
-        {num_windows, window_length} = Nx.shape(tensor)
-        overlap_length = opts[:overlap_length]
+    {num_windows, window_length} = Nx.shape(tensor)
+    overlap_length = opts[:overlap_length]
 
-        unless is_number(overlap_length) and overlap_length < window_length do
-          raise ArgumentError,
-                "overlap_length must be a number less than the window size #{window_length}, got: #{inspect(window_length)}"
-        end
+    if overlap_length >= window_length do
+      raise ArgumentError,
+            "overlap_length must be a number less than the window size #{window_length}, got: #{inspect(window_length)}"
+    end
 
-        stride = window_length - overlap_length
+    stride = window_length - overlap_length
 
-        output_holder_shape = {num_windows * stride + overlap_length}
-
-        {stride, num_windows, window_length, output_holder_shape}
-      end)
+    output_holder_shape = {num_windows * stride + overlap_length}
 
     {output, _, _, _, _, _} =
       while {
@@ -606,6 +600,7 @@ defmodule NxSignal do
   See also: `stft/3`, `istft/3`, `mel_filters/1`
 
   ## Arguments
+
     * `z` - STFT spectrum
     * `sampling_rate` - Sampling frequency in Hz
 
