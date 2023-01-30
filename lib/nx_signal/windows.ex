@@ -1,13 +1,13 @@
 defmodule NxSignal.Windows do
   @moduledoc """
-  Common window functions
+  Common window functions.
   """
   import Nx.Defn
 
   @pi :math.pi()
 
   @doc """
-  Rectangular window
+  Rectangular window.
 
   Useful for when no window function should be applied.
 
@@ -38,7 +38,7 @@ defmodule NxSignal.Windows do
   end
 
   @doc """
-  Bartlett triangular window
+  Bartlett triangular window.
 
   See also: `triangular/1`
 
@@ -75,7 +75,7 @@ defmodule NxSignal.Windows do
   end
 
   @doc """
-  Triangular window
+  Triangular window.
 
   See also: `bartlett/1`
 
@@ -122,7 +122,7 @@ defmodule NxSignal.Windows do
   end
 
   @doc """
-  Blackman window
+  Blackman window.
 
   ## Options
 
@@ -190,7 +190,7 @@ defmodule NxSignal.Windows do
   end
 
   @doc """
-  Hamming window
+  Hamming window.
 
   ## Options
 
@@ -240,7 +240,7 @@ defmodule NxSignal.Windows do
   end
 
   @doc """
-  Hann window
+  Hann window.
 
   ## Options
 

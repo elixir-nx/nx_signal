@@ -1,6 +1,6 @@
 defmodule NxSignal.Filters do
   @moduledoc """
-  Common filter functions
+  Common filter functions.
   """
   import Nx.Defn
 

@@ -1,6 +1,6 @@
 defmodule NxSignal do
   @moduledoc """
-  Nx library extension for DSP
+  Nx library extension for digital signal processing.
   """
 
   import Nx.Defn
@@ -85,7 +85,7 @@ defmodule NxSignal do
     stft_n(data, window, sampling_rate, Keyword.put(opts, :overlap_length, overlap_length))
   end
 
-  defnp stft_n(data, window, sampling_rate, opts \\ []) do
+  defnp stft_n(data, window, sampling_rate, opts) do
     {frame_length} = Nx.shape(window)
     padding = opts[:window_padding]
     fft_length = opts[:fft_length]
@@ -252,16 +252,16 @@ defmodule NxSignal do
     end
   end
 
-  deftransformp as_windowed_parse_opts(shape, opts, :reflect) do
+  deftransformp as_windowed_parse_reflect_opts(shape, opts) do
     window_length = opts[:window_length]
 
-    as_windowed_parse_opts(
+    as_windowed_parse_non_reflect_opts(
       shape,
       Keyword.put(opts, :padding, [{div(window_length, 2), div(window_length, 2) - 1}])
     )
   end
 
-  deftransformp as_windowed_parse_opts(shape, opts) do
+  deftransformp as_windowed_parse_non_reflect_opts(shape, opts) do
     opts = Keyword.validate!(opts, [:window_length, padding: :valid, stride: 1])
     window_length = opts[:window_length]
     window_dimensions = {window_length}
@@ -331,7 +331,7 @@ defmodule NxSignal do
   defnp as_windowed_non_reflect_padding(tensor, opts \\ []) do
     # current implementation only supports windowing 1D tensors
     {window_length, stride, padding, output_shape} =
-      as_windowed_parse_opts(Nx.shape(tensor), opts)
+      as_windowed_parse_non_reflect_opts(Nx.shape(tensor), opts)
 
     output = Nx.broadcast(Nx.tensor(0, type: tensor.type), output_shape)
     {num_windows, _} = Nx.shape(output)
@@ -356,7 +356,7 @@ defmodule NxSignal do
   defnp as_windowed_reflect_padding(tensor, opts \\ []) do
     # current implementation only supports windowing 1D tensors
     {window_length, stride, _padding, output_shape} =
-      as_windowed_parse_opts(Nx.shape(tensor), opts, :reflect)
+      as_windowed_parse_reflect_opts(Nx.shape(tensor), opts)
 
     output = Nx.broadcast(Nx.tensor(0, type: tensor.type), output_shape)
     {num_windows, _} = Nx.shape(output)
@@ -489,7 +489,7 @@ defmodule NxSignal do
     )
   end
 
-  defnp mel_filters_n(sampling_rate, max_mel, f_sp, opts \\ []) do
+  defnp mel_filters_n(sampling_rate, max_mel, f_sp, opts) do
     fft_length = opts[:fft_length]
     mel_bins = opts[:mel_bins]
     type = opts[:type]
