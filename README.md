@@ -26,24 +26,26 @@ You can also use `Mix.install` for standalone development:
 
 ```elixir
 Mix.install([
-    {:nx_signal, "~> 0.5"}
+  {:nx_signal, "~> 0.5"}
 ])
 ```
 
 By default, `NxSignal` only depends directly on `Nx` itself. If you wish to use separate backends
 such as `Torchx` or `EXLA`, you need to explicitly depend on them.
-All of `NxSignal`'s functionality is provided through `Nx.Defn`, so things should work out of the box with
-different backends.
+
+All of `NxSignal`'s functionality is provided through `Nx.Defn`, so things should work out of the
+box with different backends and compilers.
 
 ## Contributing
 
 Contributions are more than welcome!
 
-
 Firstly, please make sure you check the issues tracker and the pull requests list for
 a similar feature or bugfix to what you wish to contribute.
 If there aren't any mentions to be found, open up an issue so that we can discuss the
 feature beforehand.
+
+We also keep a Roadmap, which we would be glad to accept contributions for.
 
 ## Roadmap
 
