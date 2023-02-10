@@ -27,7 +27,7 @@ defmodule NxSignal do
 
   where $m$ assumes all values in the interval $[0, M - 1]$
 
-  See also: `NxSignal.Windows`, `istft/3`
+  See also: `NxSignal.Windows`, `istft/3`, `stft_to_mel/3`
 
   ## Options
 
@@ -446,7 +446,7 @@ defmodule NxSignal do
   @doc """
   Generates weights for converting an STFT representation into MEL-scale.
 
-  See also: `stft/3`, `istft/3`, `stft_to_mel/2`
+  See also: `stft/3`, `istft/3`, `stft_to_mel/3`
 
   ## Arguments
 
@@ -527,7 +527,7 @@ defmodule NxSignal do
   @doc """
   Converts a given STFT time-frequency spectrum into a MEL-scale time-frequency spectrum.
 
-  See also: `stft/3`, `istft/3`, `mel_filters/1`
+  See also: `stft/3`, `istft/3`, `mel_filters/4`
 
   ## Arguments
 
@@ -595,10 +595,12 @@ defmodule NxSignal do
     Keyword.take(opts, [:max_mel, :mel_frequency_spacing, :type])
   end
 
-  @doc """
+  @doc ~S"""
   Computes the Inverse Short-Time Fourier Transform of a tensor.
+
   Returns a tensor of M time-domain frames of length `fft_length`.
-  See also: `NxSignal.Windows`, `Nx.Signal.stft`
+
+  See also: `NxSignal.Windows`, `stft/3`
 
   ## Options
 
@@ -718,6 +720,7 @@ defmodule NxSignal do
   Performs the overlap-and-add algorithm over
   an M by N tensor, where M is the number of
   windows and N is the window size.
+
   The tensor is zero-padded on the right so
   the last window fully appears in the result.
 
