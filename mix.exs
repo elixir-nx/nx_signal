@@ -38,6 +38,13 @@ defmodule NxSignal.MixProject do
       main: "NxSignal",
       source_url_pattern: "#{@source_url}/blob/v#{@version}/nx-signal/%{path}#L%{line}",
       before_closing_body_tag: &before_closing_body_tag/1,
+      extras: [
+        "guides/filtering.livemd",
+        "guides/spectrogram.livemd"
+      ],
+      groups_for_extras: [
+        "Guides": Path.wildcard("guides/*.livemd"),
+      ],
       groups_for_functions: [
         "Functions: Time-Frequency": &(&1[:type] == :time_frequency),
         "Functions: Windowing": &(&1[:type] == :windowing),
