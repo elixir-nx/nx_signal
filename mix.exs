@@ -43,7 +43,7 @@ defmodule NxSignal.MixProject do
         "guides/spectrogram.livemd"
       ],
       groups_for_extras: [
-        "Guides": Path.wildcard("guides/*.livemd"),
+        Guides: Path.wildcard("guides/*.livemd")
       ],
       groups_for_functions: [
         "Functions: Time-Frequency": &(&1[:type] == :time_frequency),
