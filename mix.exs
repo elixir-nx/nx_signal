@@ -56,7 +56,7 @@ defmodule NxSignal.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:nx, "~> 0.5"},
+      {:nx, github: "elixir-nx/nx", sparse: "nx"},
       {:ex_doc, "~> 0.29", only: :docs}
     ]
   end
