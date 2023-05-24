@@ -718,7 +718,7 @@ defmodule NxSignal do
 
   @doc """
   Performs the overlap-and-add algorithm over
-  an M by N tensor, where M is the number of
+  an {..., M, N}-shaped tensor, where M is the number of
   windows and N is the window size.
 
   The tensor is zero-padded on the right so
@@ -736,60 +736,80 @@ defmodule NxSignal do
         s64[12]
         [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
       >
+
       iex> NxSignal.overlap_and_add(Nx.iota({3, 4}), overlap_length: 3)
       #Nx.Tensor<
         s64[6]
         [0, 5, 15, 18, 17, 11]
       >
+
+      iex> t = Nx.tensor([[[[0, 1, 2, 3], [4, 5, 6, 7]]], [[[10, 11, 12, 13], [14, 15, 16, 17]]]]) |> Nx.vectorize(x: 2, y: 1)
+      iex> NxSignal.overlap_and_add(t, overlap_length: 3)
+      #Nx.Tensor<
+        vectorized[x: 2][y: 1]
+        s64[5]
+        [
+          [
+            [0, 5, 7, 9, 7]
+          ],
+          [
+            [10, 25, 27, 29, 17]
+          ]
+        ]
+      >
   """
   @doc type: :windowing
   defn overlap_and_add(tensor, opts \\ []) do
-    opts = keyword!(opts, [:overlap_length])
-
-    {num_windows, window_length} = Nx.shape(tensor)
+    opts = keyword!(opts, [:overlap_length, type: Nx.type(tensor)])
     overlap_length = opts[:overlap_length]
+
+    %{vectorized_axes: vectorized_axes, shape: input_shape} = tensor
+    num_windows = Nx.axis_size(tensor, -2)
+    window_length = Nx.axis_size(tensor, -1)
 
     if overlap_length >= window_length do
       raise ArgumentError,
             "overlap_length must be a number less than the window size #{window_length}, got: #{inspect(window_length)}"
     end
 
+    tensor =
+      Nx.revectorize(tensor, [condensed_vectors: :auto, windows: num_windows],
+        target_shape: {window_length}
+      )
+
     stride = window_length - overlap_length
     output_holder_shape = {num_windows * stride + overlap_length}
 
-    {output, _, _, _, _, _} =
-      while {
-              out =
-                Nx.broadcast(
-                  Nx.tensor(0, type: tensor.type),
-                  output_holder_shape
-                ),
-              tensor,
-              i = 0,
-              idx_template = Nx.iota({window_length, 1}),
-              stride,
-              num_windows
-            },
-            i < num_windows do
-        current_window = tensor[i]
-        idx = idx_template + i * stride
+    out =
+      Nx.broadcast(
+        Nx.tensor(0, type: tensor.type),
+        output_holder_shape
+      )
 
-        {
-          Nx.indexed_add(out, idx, current_window),
-          tensor,
-          i + 1,
-          idx_template,
-          stride,
-          num_windows
-        }
-      end
+    idx_template = Nx.iota({window_length, 1}, vectorized_axes: [windows: 1])
+    i = Nx.iota({num_windows}) |> Nx.vectorize(:windows)
+    idx = idx_template + i * stride
 
-    case opts[:type] do
-      nil ->
-        output
+    [%{vectorized_axes: [condensed_vectors: n, windows: _]} = tensor, idx] =
+      Nx.broadcast_vectors([tensor, idx])
 
-      t ->
-        Nx.as_type(output, t)
-    end
+    tensor = Nx.revectorize(tensor, [condensed_vectors: n], target_shape: {:auto})
+    idx = Nx.revectorize(idx, [condensed_vectors: n], target_shape: {:auto, 1})
+
+    out_shape = overlap_and_add_output_shape(out.shape, input_shape)
+
+    out
+    |> Nx.indexed_add(idx, tensor)
+    |> Nx.as_type(opts[:type])
+    |> Nx.revectorize(vectorized_axes, target_shape: out_shape)
+  end
+
+  deftransformp overlap_and_add_output_shape({out_len}, in_shape) do
+    idx = tuple_size(in_shape) - 2
+
+    in_shape
+    |> Tuple.delete_at(idx)
+    |> Tuple.delete_at(idx)
+    |> Tuple.append(out_len)
   end
 end

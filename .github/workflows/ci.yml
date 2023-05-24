@@ -11,7 +11,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        elixir: ["1.13.0"]
+        elixir: ["1.14.0"]
         otp: ["24.0"]
     env:
       MIX_ENV: test
@@ -42,7 +42,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        elixir: ["1.13.0"]
+        elixir: ["1.14.0"]
         otp: ["24.0"]
     env:
       MIX_ENV: test

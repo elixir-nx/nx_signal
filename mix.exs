@@ -8,7 +8,7 @@ defmodule NxSignal.MixProject do
     [
       app: :nx_signal,
       version: @version,
-      elixir: "~> 1.13",
+      elixir: "~> 1.14",
       start_permanent: Mix.env() == :prod,
       elixirc_paths: elixirc_paths(Mix.env()),
       deps: deps(),
@@ -56,7 +56,7 @@ defmodule NxSignal.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:nx, "~> 0.5"},
+      {:nx, github: "elixir-nx/nx", sparse: "nx"},
       {:ex_doc, "~> 0.29", only: :docs}
     ]
   end
