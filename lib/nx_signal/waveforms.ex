@@ -10,6 +10,26 @@ defmodule NxSignal.Waveforms do
   # chirp
   # sweep_poly
   # unit_impulse
+  @doc """
+  Periodic sawtooth or triangular waveform.
+
+  The wave as a period of $2\\pi$, rising from -1 to 1
+  on the interval $[0, 2\\piwidth]$ and dropping from
+  1 to -1 on the interval $[2\\piwidth, 2\\pi]$.
+
+  ## Options
+
+    * `:width` - the width of the sawtooth. Must be a number
+    between 0 and 1 (both inclusive). Defaults to 1.
+
+  ## Examples
+
+  A 5Hz waveform sampled at 500Hz for 1 second can be defined as:
+
+      t = Nx.linspace(0, 1, n: 500)
+      n = Nx.multiply(2 * :math.pi() * 5, t)
+      wave = NxSignal.Waveforms.sawtooth(n)
+  """
   defn sawtooth(t, opts \\ []) do
     opts = keyword!(opts, width: 1)
 
@@ -20,8 +40,6 @@ defmodule NxSignal.Waveforms do
     end
 
     tmod = Nx.remainder(t, 2 * pi())
-    # in 0..width*2*pi, function is tmod / (pi * w) - 1
-    # in width*2*pi..2*pi, function is (pi*(w+1)-tmod) / (pi*(1-w))
 
     cond do
       width == 1 ->
