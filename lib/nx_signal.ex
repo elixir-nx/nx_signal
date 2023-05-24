@@ -763,19 +763,19 @@ defmodule NxSignal do
     opts = keyword!(opts, [:overlap_length])
     overlap_length = opts[:overlap_length]
 
-    %{vectorized_axes: vectorized_axes, shape: {num_windows, window_length}} = tensor
+    %{vectorized_axes: vectorized_axes, shape: input_shape} = tensor
+    num_windows = Nx.axis_size(tensor, -2)
+    window_length = Nx.axis_size(tensor, -1)
 
     if overlap_length >= window_length do
       raise ArgumentError,
             "overlap_length must be a number less than the window size #{window_length}, got: #{inspect(window_length)}"
     end
 
-    tensor = Nx.devectorize(tensor)
-
     tensor =
-      tensor
-      |> Nx.reshape({:auto, num_windows, window_length})
-      |> Nx.vectorize([:condensed_vectors, windows: num_windows])
+      Nx.revectorize(tensor, [condensed_vectors: :auto, windows: num_windows],
+        target_shape: {window_length}
+      )
 
     stride = window_length - overlap_length
     output_holder_shape = {num_windows * stride + overlap_length}
@@ -793,11 +793,8 @@ defmodule NxSignal do
     [%{vectorized_axes: [condensed_vectors: n, windows: _]} = tensor, idx] =
       Nx.broadcast_vectors([tensor, idx])
 
-    tensor =
-      tensor |> Nx.devectorize() |> Nx.reshape({n, :auto}) |> Nx.vectorize(condensed_vectors: n)
-
-    idx =
-      idx |> Nx.devectorize() |> Nx.reshape({n, :auto, 1}) |> Nx.vectorize(condensed_vectors: n)
+    tensor = Nx.revectorize(tensor, [condensed_vectors: n], target_shape: {:auto})
+    idx = Nx.revectorize(idx, [condensed_vectors: n], target_shape: {:auto, 1})
 
     output = Nx.indexed_add(out, idx, tensor)
 
@@ -810,19 +807,19 @@ defmodule NxSignal do
           Nx.as_type(output, t)
       end
 
-    revectorize_condensed_vectors(output, vectorized_axes)
+    Nx.revectorize(
+      output,
+      vectorized_axes,
+      target_shape: overlap_and_add_output_shape(output.shape, input_shape)
+    )
   end
 
-  deftransformp revectorize_condensed_vectors(
-                  %{shape: {output_length}} = tensor,
-                  target_vectorized_axes
-                ) do
-    target_devectorized_shape =
-      List.to_tuple(Keyword.values(target_vectorized_axes) ++ [output_length])
+  deftransformp overlap_and_add_output_shape({out_len}, in_shape) do
+    idx = tuple_size(in_shape) - 2
 
-    tensor
-    |> Nx.devectorize()
-    |> Nx.reshape(target_devectorized_shape)
-    |> Nx.vectorize(target_vectorized_axes)
+    in_shape
+    |> Tuple.delete_at(idx)
+    |> Tuple.delete_at(idx)
+    |> Tuple.append(out_len)
   end
 end
