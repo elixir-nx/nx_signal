@@ -718,7 +718,7 @@ defmodule NxSignal do
 
   @doc """
   Performs the overlap-and-add algorithm over
-  an M by N tensor, where M is the number of
+  an {..., M, N}-shaped tensor, where M is the number of
   windows and N is the window size.
 
   The tensor is zero-padded on the right so
