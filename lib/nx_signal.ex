@@ -760,7 +760,7 @@ defmodule NxSignal do
   """
   @doc type: :windowing
   defn overlap_and_add(tensor, opts \\ []) do
-    opts = keyword!(opts, [:overlap_length])
+    opts = keyword!(opts, [:overlap_length, type: Nx.type(tensor)])
     overlap_length = opts[:overlap_length]
 
     %{vectorized_axes: vectorized_axes, shape: input_shape} = tensor
@@ -796,22 +796,12 @@ defmodule NxSignal do
     tensor = Nx.revectorize(tensor, [condensed_vectors: n], target_shape: {:auto})
     idx = Nx.revectorize(idx, [condensed_vectors: n], target_shape: {:auto, 1})
 
-    output = Nx.indexed_add(out, idx, tensor)
+    out_shape = overlap_and_add_output_shape(out.shape, input_shape)
 
-    output =
-      case opts[:type] do
-        nil ->
-          output
-
-        t ->
-          Nx.as_type(output, t)
-      end
-
-    Nx.revectorize(
-      output,
-      vectorized_axes,
-      target_shape: overlap_and_add_output_shape(output.shape, input_shape)
-    )
+    out
+    |> Nx.indexed_add(idx, tensor)
+    |> Nx.as_type(opts[:type])
+    |> Nx.revectorize(vectorized_axes, target_shape: out_shape)
   end
 
   deftransformp overlap_and_add_output_shape({out_len}, in_shape) do
