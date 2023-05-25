@@ -1,5 +1,6 @@
 defmodule NxSignal.WaveformsTest do
   use NxSignal.Case, async: true
+  doctest NxSignal.Waveforms
 
   test "sawtooth scipy regression" do
     t = Nx.linspace(0, 6, n: 20)

@@ -5,7 +5,6 @@ defmodule NxSignal.Waveforms do
   import Nx.Defn
   import Nx.Constants, only: [pi: 0]
 
-  # unit_impulse
   @doc """
   Periodic sawtooth or triangular waveform.
 
@@ -85,7 +84,7 @@ defmodule NxSignal.Waveforms do
       >
 
       iex> t = Nx.iota({10}) |> Nx.multiply(:math.pi() * 2 / 10)
-      iex> Nx.tensor([0.1, 0, 0.3, 0, 0.5, 0, 0.7, 0, 0.9, 0])
+      iex> duty = Nx.tensor([0.1, 0, 0.3, 0, 0.5, 0, 0.7, 0, 0.9, 0])
       iex> NxSignal.Waveforms.square(t, duty: duty)
       #Nx.Tensor<
         s64[10]
@@ -102,7 +101,62 @@ defmodule NxSignal.Waveforms do
     Nx.select(tmod < duty * 2 * pi(), 1, -1)
   end
 
-  defn gausspulse(t, opts \\ []) do
+  @doc """
+  Gaussian modulated sinusoid.
+
+  The returned value follows the formula:
+
+  $$
+    f(t) = e^{-a t^2}(cos(2\\pif_ct) + isin(2\\pif_ct))
+  $$
+
+  Where the exponential envelope is returned as `envelope`,
+  and the real and imaginary parts of $f(t)$ are returned as
+  `in_phase` and `quadrature` in the output map.
+
+  Note that `in_phase` and `quadrature` are are equivalent to
+  $Re\{f(t)\}$ and $Im\{f(t)\} respectively.
+
+  ## Examples
+
+      iex> t = Nx.linspace(0, 1, n: 4)
+      iex> pulse = NxSignal.Waveforms.gaussian_pulse(t, center_frequency: 4)
+      iex> pulse.envelope
+      #Nx.Tensor<
+        f32[4]
+        [1.0, 0.20443114638328552, 0.001746579073369503, 6.236254534996988e-7]
+      >
+      iex> pulse.in_phase
+      #Nx.Tensor<
+        f32[4]
+        [1.0, -0.10221561044454575, -8.732887799851596e-4, 6.236254534996988e-7]
+      >
+      iex> pulse.quadrature
+      #Nx.Tensor<
+        f32[4]
+        [0.0, 0.17704254388809204, -0.0015125821810215712, 4.361525517918713e-13]
+      >
+
+
+      iex> t = Nx.linspace(0, 1, n: 4)
+      iex> pulse = NxSignal.Waveforms.gaussian_pulse(t, center_frequency: 4, bandwidth: 0.25)
+      iex> pulse.envelope
+      #Nx.Tensor<
+        f32[4]
+        [1.0, 0.6724140048027039, 0.20443114638328552, 0.028101593255996704]
+      >
+      iex> pulse.in_phase
+      #Nx.Tensor<
+        f32[4]
+        [1.0, -0.3362071216106415, -0.1022154912352562, 0.028101593255996704]
+      >
+      iex> pulse.quadrature
+      #Nx.Tensor<
+        f32[4]
+        [0.0, 0.5823275446891785, -0.177042618393898, 1.9653754179671523e-8]
+      >
+  """
+  defn gaussian_pulse(t, opts \\ []) do
     opts =
       keyword!(opts,
         center_frequency: 1000,
@@ -129,13 +183,11 @@ defmodule NxSignal.Waveforms do
             "Bandwidth reference level must be less than 0, got: #{inspect(bwr)}"
     end
 
-    # ref = 10 ** (bwr / 20)
-    # log_ref = bwr / 20 * Nx.log(10)
-    log_ref_times_4 = bwr / 5 * Nx.log(10)
+    ref = 10 ** (bwr / 20)
 
-    a = -(pi() * fc * bw) ** 2 / log_ref_times_4
+    a = -((pi() * fc * bw) ** 2) / (4.0 * Nx.log(ref))
 
-    yenv = Nx.exp(-a * t ** 2)
+    yenv = Nx.exp(-a * t * t)
     yarg = 2 * pi() * fc * t
     yI = yenv * Nx.cos(yarg)
     yQ = yenv * Nx.sin(yarg)
