@@ -5,12 +5,12 @@ defmodule NxSignal.Waveforms do
   import Nx.Defn
   import Nx.Constants, only: [pi: 0]
 
-  @doc """
+  @doc ~S"""
   Periodic sawtooth or triangular waveform.
 
-  The wave as a period of $2\\pi$, rising from -1 to 1
-  in the interval $[0, 2\\piwidth]$ and dropping from
-  1 to -1 in the interval $[2\\piwidth, 2\\pi]$.
+  The wave as a period of $2\pi$, rising from -1 to 1
+  in the interval $[0, 2\pi\cdot\text{width}]$ and dropping from
+  1 to -1 in the interval $[2\pi \cdot \text{width}, 2\pi]$.
 
   ## Options
 
@@ -103,13 +103,13 @@ defmodule NxSignal.Waveforms do
     Nx.select(tmod < duty * 2 * pi(), 1, -1)
   end
 
-  @doc """
+  @doc ~S"""
   Gaussian modulated sinusoid.
 
   The returned value follows the formula:
 
   $$
-    f(t) = e^{-a t^2}(cos(2\\pif_ct) + isin(2\\pif_ct))
+  f(t) = e^{-at^2}(cos(2 \pi f_c t) + isin(2 \pi f_c t))
   $$
 
   Where the exponential envelope is returned as `envelope`,
@@ -117,7 +117,7 @@ defmodule NxSignal.Waveforms do
   `in_phase` and `quadrature` in the output map.
 
   Note that `in_phase` and `quadrature` are are equivalent to
-  $Re\{f(t)\}$ and $Im\{f(t)\} respectively.
+  $\operatorname{Re} \lbrace f(t) \rbrace$ and $\operatorname{Im} \lbrace f(t) \rbrace$ respectively.
 
   ## Examples
 
@@ -138,7 +138,6 @@ defmodule NxSignal.Waveforms do
         f32[4]
         [0.0, 0.17704254388809204, -0.0015125821810215712, 4.361525517918713e-13]
       >
-
 
       iex> t = Nx.linspace(0, 1, n: 4)
       iex> pulse = NxSignal.Waveforms.gaussian_pulse(t, center_frequency: 4, bandwidth: 0.25)
