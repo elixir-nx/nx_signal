@@ -25,6 +25,7 @@ defmodule NxSignal.Waveforms do
       n = Nx.multiply(2 * :math.pi() * 5, t)
       wave = NxSignal.Waveforms.sawtooth(n)
   """
+  @doc type: :waveforms
   defn sawtooth(t, opts \\ []) do
     opts = keyword!(opts, width: 1)
 
@@ -91,6 +92,7 @@ defmodule NxSignal.Waveforms do
         [1, -1, 1, -1, 1, -1, 1, -1, 1, -1]
       >
   """
+  @doc type: :waveforms
   deftransform square(t, opts \\ []) do
     opts = Keyword.validate!(opts, duty: 0.5)
     square_n(t, opts[:duty])
@@ -156,6 +158,7 @@ defmodule NxSignal.Waveforms do
         [0.0, 0.5823275446891785, -0.177042618393898, 1.9653754179671523e-8]
       >
   """
+  @doc type: :waveforms
   defn gaussian_pulse(t, opts \\ []) do
     opts =
       keyword!(opts,
@@ -243,6 +246,7 @@ defmodule NxSignal.Waveforms do
         [1.0, 0.9989554286003113, -0.33371755480766296, -0.2700612545013428, 0.8558982610702515]
       >
   """
+  @doc type: :waveforms
   defn chirp(t, f0, t1, f1, opts \\ []) do
     opts = keyword!(opts, phi: 0, vertex_zero: true, method: :linear)
 
@@ -333,9 +337,10 @@ defmodule NxSignal.Waveforms do
       iex> NxSignal.Waveforms.polynomial_sweep(t, Nx.tensor([1, 0]), phi: 180, phi_unit: :degrees)
       #Nx.Tensor<
         f32[5]
-        [-1.0, -0.7071065306663513, 1.0, -0.7071084976196289, -1.0]
+        [-1.0, -0.7071069478988647, 1.0, -0.7071129679679871, -1.0]
       >
   """
+  @doc type: :waveforms
   defn polynomial_sweep(t, coefs, opts \\ []) do
     opts = keyword!(opts, phi: 0, phi_unit: :radians)
     {n} = Nx.shape(coefs)
@@ -356,6 +361,49 @@ defmodule NxSignal.Waveforms do
     Nx.cos(2 * pi() * phase + phi)
   end
 
+  @doc """
+  Discrete delta function or unit basis vector.
+
+  ## Options
+
+    * `:index` - one of number, numerical tensor
+      with length equal to the rank of the given
+      shape, or `:midpoint`. `index: :midpoint`,
+      is a shortcut for inserting the impulse
+      at the index which corresponds to half of
+      each dimension. Defaults to 0.
+
+    * `:type` - datatype for the output. Defaults to `:f32`.
+
+  ## Examples
+
+      iex> NxSignal.Waveforms.unit_impulse({2})
+      #Nx.Tensor<
+        f32[2]
+        [1.0, 0.0]
+      >
+
+      iex> NxSignal.Waveforms.unit_impulse({3, 5}, type: :s64, index: :midpoint)
+      #Nx.Tensor<
+        s64[3][5]
+        [
+          [0, 0, 0, 0, 0],
+          [0, 0, 1, 0, 0],
+          [0, 0, 0, 0, 0]
+        ]
+      >
+
+      iex> NxSignal.Waveforms.unit_impulse({3, 5}, index: Nx.tensor([[2, 3]]), type: :s64)
+      #Nx.Tensor<
+        s64[3][5]
+        [
+          [0, 0, 0, 0, 0],
+          [0, 0, 0, 0, 0],
+          [0, 0, 0, 1, 0]
+        ]
+      >
+  """
+  @doc type: :waveforms
   deftransform unit_impulse(shape, opts \\ []) do
     opts = Keyword.validate!(opts, index: 0, type: :f32)
     index = unit_impulse_index(shape, opts[:index])
@@ -368,23 +416,24 @@ defmodule NxSignal.Waveforms do
     type = opts[:type]
 
     zero = Nx.tensor(0, type: type)
-    one = zero + 1
 
     zeros = Nx.broadcast(zero, shape)
 
-    Nx.indexed_put(zeros, index, one)
+    Nx.indexed_put(zeros, index, 1)
   end
 
   deftransformp unit_impulse_index(shape, index) do
+    n = Nx.rank(shape)
+
     case index do
-      :mid ->
+      :midpoint ->
         shape
         |> Tuple.to_list()
         |> Enum.map(&div(&1, 2))
         |> then(&Nx.tensor(&1))
 
       index ->
-        index
+        Nx.reshape(index, {n})
     end
   end
 end
