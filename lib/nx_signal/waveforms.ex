@@ -67,6 +67,33 @@ defmodule NxSignal.Waveforms do
     * `:duty` - a number or tensor representing the duty cycle.
     If a tensor is given, the waveform changes over time, and it
     must have the same length as the `t` input. Defaults to `0.5`.
+
+  ## Examples
+
+      iex> t = Nx.iota({10}) |> Nx.multiply(:math.pi() * 2 / 10)
+      iex> NxSignal.Waveforms.square(t, duty: 0.1)
+      #Nx.Tensor<
+        s64[10]
+        [1, -1, -1, -1, -1, -1, -1, -1, -1, -1]
+      >
+      iex> NxSignal.Waveforms.square(t, duty: 0.5)
+      #Nx.Tensor<
+        s64[10]
+        [1, 1, 1, 1, 1, -1, -1, -1, -1, -1]
+      >
+      iex> NxSignal.Waveforms.square(t, duty: 1)
+      #Nx.Tensor<
+        s64[10]
+        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+      >
+
+      iex> t = Nx.iota({10}) |> Nx.multiply(:math.pi() * 2 / 10)
+      iex> Nx.tensor([0.1, 0, 0.3, 0, 0.5, 0, 0.7, 0, 0.9, 0])
+      iex> NxSignal.Waveforms.square(t, duty: duty)
+      #Nx.Tensor<
+        s64[10]
+        [1, -1, 1, -1, 1, -1, 1, -1, 1, -1]
+      >
   """
   deftransform square(t, opts \\ []) do
     opts = Keyword.validate!(opts, duty: 0.5)
@@ -75,7 +102,6 @@ defmodule NxSignal.Waveforms do
 
   defnp square_n(t, duty) do
     tmod = Nx.remainder(t, 2 * pi())
-
     Nx.select(tmod < duty * 2 * pi(), 1, -1)
   end
 end
