@@ -5,9 +5,6 @@ defmodule NxSignal.Waveforms do
   import Nx.Defn
   import Nx.Constants, only: [pi: 0]
 
-  # gauss_pulse
-  # chirp
-  # sweep_poly
   # unit_impulse
   @doc """
   Periodic sawtooth or triangular waveform.
@@ -103,5 +100,144 @@ defmodule NxSignal.Waveforms do
   defnp square_n(t, duty) do
     tmod = Nx.remainder(t, 2 * pi())
     Nx.select(tmod < duty * 2 * pi(), 1, -1)
+  end
+
+  defn gausspulse(t, opts \\ []) do
+    opts =
+      keyword!(opts,
+        center_frequency: 1000,
+        bandwidth: 0.5,
+        bandwidth_reference_level: -6
+      )
+
+    fc = opts[:center_frequency]
+    bw = opts[:bandwidth]
+    bwr = opts[:bandwidth_reference_level]
+
+    if fc < 0 do
+      raise ArgumentError,
+            "Center frequency must be greater than or equal to 0, got: #{inspect(fc)}"
+    end
+
+    if bw <= 0 do
+      raise ArgumentError,
+            "Bandwidth must be greater than 0, got: #{inspect(bw)}"
+    end
+
+    if bwr >= 0 do
+      raise ArgumentError,
+            "Bandwidth reference level must be less than 0, got: #{inspect(bwr)}"
+    end
+
+    # ref = 10 ** (bwr / 20)
+    # log_ref = bwr / 20 * Nx.log(10)
+    log_ref_times_4 = bwr / 5 * Nx.log(10)
+
+    a = -(pi() * fc * bw) ** 2 / log_ref_times_4
+
+    yenv = Nx.exp(-a * t ** 2)
+    yarg = 2 * pi() * fc * t
+    yI = yenv * Nx.cos(yarg)
+    yQ = yenv * Nx.sin(yarg)
+
+    %{envelope: yenv, in_phase: yI, quadrature: yQ}
+  end
+
+  defn chirp(t, f0, t1, f1, opts \\ []) do
+    opts = keyword!(opts, phi: 0, vertex_zero: true, method: :linear)
+
+    case {chirp_validate_method(opts[:method]), opts[:vertex_zero]} do
+      {:linear, _} ->
+        beta = (f1 - f0) / t1
+        2 * pi() * (f0 * t + 0.5 * beta * t ** 2)
+
+      {:quadratic, true} ->
+        beta = (f1 - f0) / t1 ** 2
+        2 * pi() * (f0 * t + beta * t ** 3 / 3)
+
+      {:quadratic, _} ->
+        beta = (f1 - f0) / t1 ** 2
+        2 * pi() * (f1 * t + beta * ((t1 - t) ** 3 - t1 ** 3) / 3)
+
+      {:logarithmic, _} ->
+        if f0 * f1 <= 0 do
+          raise ArgumentError,
+                "for method: :logarithmic, f0 and f1 must be non-zero with the same sign, got: #{inspect(f0)} and #{inspect(f1)}"
+        end
+
+        if f0 == f1 do
+          2 * pi() * f0 * t
+        else
+          beta = t1 / Nx.log(f1 / f0)
+          2 * pi() * beta * f0 * ((f1 / f0) ** (t / t1) - 1.0)
+        end
+
+      {:hyperbolic, _} ->
+        if f0 == f1 do
+          2 * pi() * f0 * t
+        else
+          singular_point = -f1 * t1 / (f0 - f1)
+          2 * pi() * (-singular_point * f0) * Nx.log(Nx.abs(1 - t / singular_point))
+        end
+    end
+  end
+
+  deftransformp chirp_validate_method(method) do
+    valid_methods = [:linear, :quadratic, :logarithmic, :hyperbolic]
+
+    unless method in valid_methods do
+      raise ArgumentError,
+            "invalid method, must be one of #{inspect(valid_methods)}, got: #{inspect(method)}"
+    end
+
+    method
+  end
+
+  defn sweep_poly(t, coefs, opts \\ []) do
+    opts = keyword!(opts, phi: 0, phi_unit: :radians)
+    {n} = Nx.shape(coefs)
+    # assumes t is of shape {m}
+    t_poly = t ** (n - 1 - Nx.iota({n, 1}))
+    phase = Nx.dot(coefs, t_poly)
+
+    phi =
+      case {opts[:phi], opts[:phi_unit]} do
+        {phi, :radians} -> phi
+        {phi, :degrees} -> phi * pi() / 180
+      end
+
+    Nx.cos(phase + phi)
+  end
+
+  deftransform unit_impulse(shape, opts \\ []) do
+    opts = Keyword.validate!(opts, index: 0, type: :f32)
+    index = unit_impulse_index(shape, opts[:index])
+
+    unit_impulse_n(index, Keyword.put(opts, :shape, shape))
+  end
+
+  defnp unit_impulse_n(index, opts \\ []) do
+    shape = opts[:shape]
+    type = opts[:type]
+
+    zero = Nx.tensor(0, type: type)
+    one = zero + 1
+
+    zeros = Nx.broadcast(zero, shape)
+
+    Nx.indexed_put(zeros, index, one)
+  end
+
+  deftransformp unit_impulse_index(shape, index) do
+    case index do
+      :mid ->
+        shape
+        |> Tuple.to_list()
+        |> Enum.map(&div(&1, 2))
+        |> then(&Nx.tensor(&1))
+
+      index ->
+        index
+    end
   end
 end
