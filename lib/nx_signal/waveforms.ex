@@ -296,12 +296,56 @@ defmodule NxSignal.Waveforms do
     method
   end
 
-  defn sweep_poly(t, coefs, opts \\ []) do
+  @doc """
+  Frequency-swept cosine generator, with a time-dependent frequency.
+
+  This function generates a sinusoidal function whose instantaneous
+  frequency varies with time. The frequency at time `t` is given by
+  the polynomial specified by the coefficients contained in `coefs`.
+
+  See also: `chirp/5`
+
+  ## Options
+
+    * `:phi` - phase shift to be applied before calculating the `Nx.cos`
+      for the output. Defaults to 0.
+    * `:phi_unit` - determines if `:phi` is given in `:radians` or `:degrees`.
+      Defaults to `:radians`.
+
+  ## Examples
+
+      iex> t = Nx.linspace(0, 10, n: 5)
+      iex> NxSignal.Waveforms.polynomial_sweep(t, Nx.tensor([2, 0, 1]))
+      #Nx.Tensor<
+        f32[5]
+        [1.0, 0.866027295589447, -0.500006377696991, 1.7942518752533942e-5, -0.49998921155929565]
+      >
+      iex> NxSignal.Waveforms.polynomial_sweep(t, Nx.tensor([2, 0, 1]), phi: :math.pi() / 2)
+      #Nx.Tensor<
+        f32[5]
+        [-4.371138828673793e-8, 0.499999463558197, -0.8660194873809814, 1.0, 0.8660338521003723]
+      >
+      iex> NxSignal.Waveforms.polynomial_sweep(t, Nx.tensor([1, 0]))
+      #Nx.Tensor<
+        f32[5]
+        [1.0, 0.7071065306663513, -1.0, 0.7071084976196289, 1.0]
+      >
+      iex> NxSignal.Waveforms.polynomial_sweep(t, Nx.tensor([1, 0]), phi: 180, phi_unit: :degrees)
+      #Nx.Tensor<
+        f32[5]
+        [-1.0, -0.7071065306663513, 1.0, -0.7071084976196289, -1.0]
+      >
+  """
+  defn polynomial_sweep(t, coefs, opts \\ []) do
     opts = keyword!(opts, phi: 0, phi_unit: :radians)
     {n} = Nx.shape(coefs)
     # assumes t is of shape {m}
-    t_poly = t ** (n - 1 - Nx.iota({n, 1}))
-    phase = Nx.dot(coefs, t_poly)
+    iota = n - Nx.iota({n})
+    t_poly = t ** Nx.new_axis(iota, 1)
+
+    int_coefs = coefs / iota
+
+    phase = Nx.dot(int_coefs, t_poly)
 
     phi =
       case {opts[:phi], opts[:phi_unit]} do
@@ -309,7 +353,7 @@ defmodule NxSignal.Waveforms do
         {phi, :degrees} -> phi * pi() / 180
       end
 
-    Nx.cos(phase + phi)
+    Nx.cos(2 * pi() * phase + phi)
   end
 
   deftransform unit_impulse(shape, opts \\ []) do
