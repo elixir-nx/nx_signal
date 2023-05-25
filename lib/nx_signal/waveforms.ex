@@ -195,43 +195,94 @@ defmodule NxSignal.Waveforms do
     %{envelope: yenv, in_phase: yI, quadrature: yQ}
   end
 
+  @doc """
+  Chirp function.
+
+  Starts at `t` with frequency `f0` and ends at `t1` with
+  frequency `f1`.
+
+  ## Options
+
+    * `:phi` - phase shift for the chirp.
+    * `:vertex_zero` - determines the position of the parabolic vertex
+      for when `method: :quadratic`. Defaults to `true`.
+    * `:method` - One of various frequency interpolation methods:
+      * `:linear` - linear interpolation.
+      * `:quadratic` - parabolic interpolation with vertex at `t1` or `t0`,
+        depending if `vertex_zero: false` or `vertex_zero: true` respectively.
+      * `:hyperbolic` - hyperbolic interpolation.
+      * `:logarithmic` - logarithmic (also known as geometric or exponential)
+        interpolation. `f0` and `f1` must be non-zero and have the same sign.
+
+  ## Examples
+
+      iex> t = Nx.linspace(0, 10, n: 5)
+      iex> NxSignal.Waveforms.chirp(t, 10, 10, 1, method: :linear)
+      #Nx.Tensor<
+        f32[5]
+        [1.0, 0.38268470764160156, 3.795033308051643e-6, -0.382683128118515, 1.0]
+      >
+      iex> NxSignal.Waveforms.chirp(t, 10, 10, 1, method: :quadratic)
+      #Nx.Tensor<
+        f32[5]
+        [1.0, -0.9807833433151245, -9.958475288840418e-8, -0.5555803775787354, 1.0]
+      >
+      iex> NxSignal.Waveforms.chirp(t, 10, 10, 1, method: :quadratic, vertex_zero: false)
+      #Nx.Tensor<
+        f32[5]
+        [1.0, 0.5555850863456726, -7.490481493732659e-6, 0.98078453540802, 1.0]
+      >
+      iex> NxSignal.Waveforms.chirp(t, 10, 10, 1, method: :hyperbolic)
+      #Nx.Tensor<
+        f32[5]
+        [1.0, 0.8229323029518127, 0.9335360527038574, 0.013466471806168556, -0.8630329966545105]
+      >
+      iex> NxSignal.Waveforms.chirp(t, 10, 10, 1, method: :logarithmic)
+      #Nx.Tensor<
+        f32[5]
+        [1.0, 0.9989554286003113, -0.33371755480766296, -0.2700612545013428, 0.8558982610702515]
+      >
+  """
   defn chirp(t, f0, t1, f1, opts \\ []) do
     opts = keyword!(opts, phi: 0, vertex_zero: true, method: :linear)
 
-    case {chirp_validate_method(opts[:method]), opts[:vertex_zero]} do
-      {:linear, _} ->
-        beta = (f1 - f0) / t1
-        2 * pi() * (f0 * t + 0.5 * beta * t ** 2)
+    phase =
+      case {chirp_validate_method(opts[:method]), opts[:vertex_zero]} do
+        {:linear, _} ->
+          beta = (f1 - f0) / t1
+          2 * pi() * (f0 * t + 0.5 * beta * t ** 2)
 
-      {:quadratic, true} ->
-        beta = (f1 - f0) / t1 ** 2
-        2 * pi() * (f0 * t + beta * t ** 3 / 3)
+        {:quadratic, true} ->
+          beta = (f1 - f0) / t1 ** 2
+          2 * pi() * (f0 * t + beta * t ** 3 / 3)
 
-      {:quadratic, _} ->
-        beta = (f1 - f0) / t1 ** 2
-        2 * pi() * (f1 * t + beta * ((t1 - t) ** 3 - t1 ** 3) / 3)
+        {:quadratic, _} ->
+          beta = (f1 - f0) / t1 ** 2
+          2 * pi() * (f1 * t + beta * ((t1 - t) ** 3 - t1 ** 3) / 3)
 
-      {:logarithmic, _} ->
-        if f0 * f1 <= 0 do
-          raise ArgumentError,
-                "for method: :logarithmic, f0 and f1 must be non-zero with the same sign, got: #{inspect(f0)} and #{inspect(f1)}"
-        end
+        {:logarithmic, _} ->
+          cond do
+            f0 * f1 <= 0 ->
+              Nx.broadcast(:nan, t.shape)
 
-        if f0 == f1 do
-          2 * pi() * f0 * t
-        else
-          beta = t1 / Nx.log(f1 / f0)
-          2 * pi() * beta * f0 * ((f1 / f0) ** (t / t1) - 1.0)
-        end
+            f0 == f1 ->
+              2 * pi() * f0 * t
 
-      {:hyperbolic, _} ->
-        if f0 == f1 do
-          2 * pi() * f0 * t
-        else
-          singular_point = -f1 * t1 / (f0 - f1)
-          2 * pi() * (-singular_point * f0) * Nx.log(Nx.abs(1 - t / singular_point))
-        end
-    end
+            true ->
+              beta = t1 / Nx.log(f1 / f0)
+              2 * pi() * beta * f0 * ((f1 / f0) ** (t / t1) - 1.0)
+          end
+
+        {:hyperbolic, _} ->
+          if f0 == f1 do
+            2 * pi() * f0 * t
+          else
+            singular_point = -f1 * t1 / (f0 - f1)
+            2 * pi() * (-singular_point * f0) * Nx.log(Nx.abs(1 - t / singular_point))
+          end
+      end
+
+    Nx.cos(phase + opts[:phi])
   end
 
   deftransformp chirp_validate_method(method) do
