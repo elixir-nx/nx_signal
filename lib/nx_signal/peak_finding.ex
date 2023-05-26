@@ -88,7 +88,7 @@ defmodule NxSignal.PeakFinding do
       >
       iex> Nx.slice_along_axis(indices, 0, Nx.to_number(valid_indices), axis: 0)
       #Nx.Tensor<
-        s64[2][1]
+        s64[1][1]
         [
           [1]
         ]
@@ -100,7 +100,7 @@ defmodule NxSignal.PeakFinding do
       iex> %{indices: indices, valid_indices: valid_indices} = NxSignal.PeakFinding.argrelmin(x)
       iex> valid_indices
       #Nx.Tensor<
-        s64
+        u64
         2
       >
       iex> indices[0..1]
@@ -114,7 +114,7 @@ defmodule NxSignal.PeakFinding do
       iex> %{indices: indices} = NxSignal.PeakFinding.argrelmin(x, axis: 1)
       iex> valid_indices
       #Nx.Tensor<
-        s64
+        u64
         2
       >
       iex> indices[0..1]
@@ -127,6 +127,7 @@ defmodule NxSignal.PeakFinding do
       >
 
   """
+  @doc type: :peak_finding
   defn argrelmin(data, opts \\ []) do
     opts = keyword!(opts, axis: 0, order: 1)
     argrelextrema(data, &Nx.less/2, opts)
@@ -214,7 +215,7 @@ defmodule NxSignal.PeakFinding do
       >
       iex> Nx.slice_along_axis(indices, 0, Nx.to_number(valid_indices), axis: 0)
       #Nx.Tensor<
-        s64[2][1]
+        s64[1][1]
         [
           [3]
         ]
@@ -226,7 +227,7 @@ defmodule NxSignal.PeakFinding do
       iex> %{indices: indices, valid_indices: valid_indices} = NxSignal.PeakFinding.argrelmax(x)
       iex> valid_indices
       #Nx.Tensor<
-        s64
+        u64
         1
       >
       iex> indices[0]
@@ -237,7 +238,7 @@ defmodule NxSignal.PeakFinding do
       iex> %{indices: indices} = NxSignal.PeakFinding.argrelmax(x, axis: 1)
       iex> valid_indices
       #Nx.Tensor<
-        s64
+        u64
         1
       >
       iex> indices[0]
@@ -247,6 +248,7 @@ defmodule NxSignal.PeakFinding do
       >
 
   """
+  @doc type: :peak_finding
   defn argrelmax(data, opts \\ []) do
     opts = keyword!(opts, axis: 0, order: 1)
     argrelextrema(data, &Nx.greater/2, opts)
@@ -300,7 +302,7 @@ defmodule NxSignal.PeakFinding do
       >
       iex> result.indices[0..2]
       #Nx.Tensor<
-        s64[2][1]
+        s64[3][1]
         [
           [5],
           [7],
@@ -334,6 +336,7 @@ defmodule NxSignal.PeakFinding do
         ]
       >
   """
+  @doc type: :peak_finding
   defn argrelextrema(data, comparator_fn, opts \\ []) do
     opts = keyword!(opts, axis: 0, order: 1)
 
