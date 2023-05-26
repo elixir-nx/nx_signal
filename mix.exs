@@ -48,7 +48,8 @@ defmodule NxSignal.MixProject do
       groups_for_functions: [
         "Functions: Time-Frequency": &(&1[:type] == :time_frequency),
         "Functions: Windowing": &(&1[:type] == :windowing),
-        "Functions: Filters": &(&1[:type] == :filters)
+        "Functions: Filters": &(&1[:type] == :filters),
+        "Functions: Waveforms": &(&1[:type] == :waveforms)
       ]
     ]
   end

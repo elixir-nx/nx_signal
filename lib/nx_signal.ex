@@ -731,6 +731,7 @@ defmodule NxSignal do
       If not given, defaults to `Nx.Type.to_complex/1` called on the input type.
 
   ## Examples
+
       iex> NxSignal.overlap_and_add(Nx.iota({3, 4}), overlap_length: 0)
       #Nx.Tensor<
         s64[12]
