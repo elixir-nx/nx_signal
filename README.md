@@ -17,7 +17,7 @@ to your Mix project:
 ```elixir
 def deps do
   [
-    {:nx_signal, "~> 0.5"}
+    {:nx_signal, "~> 0.1"}
   ]
 end
 ```
@@ -26,7 +26,7 @@ You can also use `Mix.install` for standalone development:
 
 ```elixir
 Mix.install([
-  {:nx_signal, "~> 0.5"}
+  {:nx_signal, "~> 0.1"}
 ])
 ```
 
