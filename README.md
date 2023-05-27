@@ -36,6 +36,10 @@ such as `Torchx` or `EXLA`, you need to explicitly depend on them.
 All of `NxSignal`'s functionality is provided through `Nx.Defn`, so things should work out of the
 box with different backends and compilers.
 
+## Guides (Livebook)
+
+Check out the "guides" folder in the repo for examples. 
+
 ## Contributing
 
 Contributions are more than welcome!
