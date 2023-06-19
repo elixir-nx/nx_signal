@@ -38,7 +38,7 @@ box with different backends and compilers.
 
 ## Guides (Livebook)
 
-Check out the "guides" folder in the repo for examples. 
+Check out the "guides" directory in the repository for examples. 
 
 ## Contributing
 
