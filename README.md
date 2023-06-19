@@ -17,7 +17,7 @@ to your Mix project:
 ```elixir
 def deps do
   [
-    {:nx_signal, "~> 0.5"}
+    {:nx_signal, "~> 0.1"}
   ]
 end
 ```
@@ -26,7 +26,7 @@ You can also use `Mix.install` for standalone development:
 
 ```elixir
 Mix.install([
-  {:nx_signal, "~> 0.5"}
+  {:nx_signal, "~> 0.1"}
 ])
 ```
 
@@ -35,6 +35,10 @@ such as `Torchx` or `EXLA`, you need to explicitly depend on them.
 
 All of `NxSignal`'s functionality is provided through `Nx.Defn`, so things should work out of the
 box with different backends and compilers.
+
+## Guides (Livebook)
+
+Check out the "guides" folder in the repo for examples. 
 
 ## Contributing
 

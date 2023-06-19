@@ -2,7 +2,7 @@
 
 ```elixir
 Mix.install([
-  {:nx_signal, ">= 0.0.0", github: "polvalente/nx-signal"},
+  {:nx_signal, "~> 0.1"},
   {:vega_lite, "~> 0.1.4"},
   {:kino_vega_lite, "~> 0.1.1"}
 ])
