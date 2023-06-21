@@ -15,7 +15,8 @@ defmodule NxSignal.Case do
     :time_frequency,
     :windowing,
     :filters,
-    :waveforms
+    :waveforms,
+    :peak_finding
   ]
 
   def validate_doc_metadata(module) do
