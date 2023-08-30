@@ -172,10 +172,10 @@ defmodule NxSignal do
 
     * `:window_length` - the number of samples in a window
     * `:stride` - The number of samples to skip between windows. Defaults to `1`.
-    * `:padding` - A can be `:reflect` or a valid padding as per `Nx.pad/3` over the
-      input tensor's shape. Defaults to `:valid`. If `:reflect` or `:zeros`, the first window will be centered
-      at the start of the signal. For `:reflect`, each incomplete window will be reflected as if it was
-      periodic (see examples for `as_windowed/2`). For `:zeros`, each incomplete window will be zero-padded.
+    * `:padding` - Padding mode, can be `:reflect` or a valid padding as per `Nx.pad/3` over the
+      input tensor's shape. Defaults to `:valid`. If `:reflect` or `:same`, the first window will be centered
+      at the start of the signal. The padding is applied for the whole input, rather than individual
+      windows. For `:zeros`, effectively each incomplete window will be zero-padded.
 
   ## Examples
 
@@ -221,7 +221,7 @@ defmodule NxSignal do
       #Nx.Tensor<
         s64[7][6]
         [
-          [1, 2, 1, 0, 1, 2],
+          [3, 2, 1, 0, 1, 2],
           [2, 1, 0, 1, 2, 3],
           [1, 0, 1, 2, 3, 4],
           [0, 1, 2, 3, 4, 5],
@@ -235,7 +235,7 @@ defmodule NxSignal do
       #Nx.Tensor<
         s64[5][6]
         [
-          [1, 2, 1, 0, 1, 2],
+          [3, 2, 1, 0, 1, 2],
           [1, 0, 1, 2, 3, 4],
           [1, 2, 3, 4, 5, 6],
           [3, 4, 5, 6, 7, 8],
@@ -257,7 +257,7 @@ defmodule NxSignal do
 
     as_windowed_parse_non_reflect_opts(
       shape,
-      Keyword.put(opts, :padding, [{div(window_length, 2), div(window_length, 2) - 1}])
+      Keyword.put(opts, :padding, [{div(window_length, 2), div(window_length, 2)}])
     )
   end
 
@@ -333,18 +333,9 @@ defmodule NxSignal do
     {window_length, stride, padding, output_shape} =
       as_windowed_parse_non_reflect_opts(Nx.shape(tensor), opts)
 
-    output = Nx.broadcast(Nx.tensor(0, type: tensor.type), output_shape)
-    {num_windows, _} = Nx.shape(output)
+    tensor = Nx.pad(tensor, 0, padding)
 
-    {output, _, _, _} =
-      while {output, i = 0, current_window = 0, t = Nx.pad(tensor, 0, padding)},
-            current_window < num_windows do
-        window = t |> Nx.slice([i], [window_length])
-        updated = Nx.put_slice(output, [current_window, 0], Nx.new_axis(window, 0))
-        {updated, i + stride, current_window + 1, t}
-      end
-
-    output
+    as_windowed_apply(tensor, stride, output_shape, window_length)
   end
 
   defnp as_windowed_reflect_padding(tensor, opts \\ []) do
@@ -352,74 +343,24 @@ defmodule NxSignal do
     {window_length, stride, _padding, output_shape} =
       as_windowed_parse_reflect_opts(Nx.shape(tensor), opts)
 
+    half_window = div(window_length, 2)
+    tensor = Nx.reflect(tensor, padding_config: [{half_window, half_window}])
+
+    as_windowed_apply(tensor, stride, output_shape, window_length)
+  end
+
+  defnp as_windowed_apply(tensor, stride, output_shape, window_length) do
     output = Nx.broadcast(Nx.tensor(0, type: tensor.type), output_shape)
     {num_windows, _} = Nx.shape(output)
 
-    leading_window_indices = generate_leading_window_indices(window_length, stride)
-
-    trailing_window_indices =
-      generate_trailing_window_indices(Nx.size(tensor), window_length, stride)
-
-    half_window = div(window_length - 1, 2) + 1
-
     {output, _, _, _} =
-      while {output, i = 0, current_window = 0, t = tensor},
-            current_window < num_windows do
-        # Here windows are centered at the current index
-
-        window =
-          cond do
-            i < half_window ->
-              # We're indexing before we have a full window on the left
-              Nx.take(t, leading_window_indices[i])
-
-            i > Nx.size(t) - half_window ->
-              # We're indexing after the last full window on the right
-              Nx.take(t, trailing_window_indices[i - (Nx.size(t) - half_window + 1)])
-
-            true ->
-              # Case where we can index a full window
-              t |> Nx.slice([i - half_window], [window_length])
-          end
-
+      while {output, i = 0, current_window = 0, t = tensor}, current_window < num_windows do
+        window = t |> Nx.slice([i], [window_length])
         updated = Nx.put_slice(output, [current_window, 0], Nx.new_axis(window, 0))
         {updated, i + stride, current_window + 1, t}
       end
 
-    # Now we need to handle the tail-end of the windows,
-    # since they are currently all the same value. We want to apply the tapering-off
-    # like we did with the initial windows.
-
     output
-  end
-
-  deftransformp generate_leading_window_indices(window_length, stride) do
-    half_window = div(window_length, 2)
-
-    for offset <- 0..half_window//stride do
-      partial_length = offset + half_window
-      padding_length = window_length - partial_length
-
-      {partial_length}
-      |> Nx.iota()
-      |> Nx.reflect(padding_config: [{padding_length, 0}])
-    end
-    |> Nx.stack()
-  end
-
-  deftransformp generate_trailing_window_indices(tensor_size, window_length, stride) do
-    min_index = tensor_size - window_length + 1
-
-    for {offset, add} <- Enum.with_index(min_index..(tensor_size - 1)//stride) do
-      partial_length = tensor_size - offset
-      padding_length = window_length - partial_length
-
-      {partial_length}
-      |> Nx.iota()
-      |> Nx.add(min_index + add - rem(window_length, 2))
-      |> Nx.reflect(padding_config: [{0, padding_length}])
-    end
-    |> Nx.stack()
   end
 
   @doc """
