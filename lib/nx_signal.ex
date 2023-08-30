@@ -336,18 +336,12 @@ defmodule NxSignal do
     output = Nx.broadcast(Nx.tensor(0, type: tensor.type), output_shape)
     {num_windows, _} = Nx.shape(output)
 
-    index_template =
-      Nx.concatenate([Nx.broadcast(0, {window_length, 1}), Nx.iota({window_length, 1})], axis: 1)
-
-    {output, _, _, _, _} =
-      while {output, i = 0, current_window = 0, t = Nx.pad(tensor, 0, padding), index_template},
+    {output, _, _, _} =
+      while {output, i = 0, current_window = 0, t = Nx.pad(tensor, 0, padding)},
             current_window < num_windows do
-        indices = index_template + Nx.stack([current_window, 0])
-        updates = t |> Nx.slice([i], [window_length]) |> Nx.flatten()
-
-        updated = Nx.indexed_add(output, indices, updates)
-
-        {updated, i + stride, current_window + 1, t, index_template}
+        window = t |> Nx.slice([i], [window_length])
+        updated = Nx.put_slice(output, [current_window, 0], Nx.new_axis(window, 0))
+        {updated, i + stride, current_window + 1, t}
       end
 
     output
@@ -361,9 +355,6 @@ defmodule NxSignal do
     output = Nx.broadcast(Nx.tensor(0, type: tensor.type), output_shape)
     {num_windows, _} = Nx.shape(output)
 
-    index_template =
-      Nx.concatenate([Nx.broadcast(0, {window_length, 1}), Nx.iota({window_length, 1})], axis: 1)
-
     leading_window_indices = generate_leading_window_indices(window_length, stride)
 
     trailing_window_indices =
@@ -371,40 +362,28 @@ defmodule NxSignal do
 
     half_window = div(window_length - 1, 2) + 1
 
-    {output, _, _, _, _} =
-      while {output, i = 0, current_window = 0, t = tensor, index_template},
+    {output, _, _, _} =
+      while {output, i = 0, current_window = 0, t = tensor},
             current_window < num_windows do
         # Here windows are centered at the current index
 
-        cond do
-          i < half_window ->
-            # We're indexing before we have a full window on the left
+        window =
+          cond do
+            i < half_window ->
+              # We're indexing before we have a full window on the left
+              Nx.take(t, leading_window_indices[i])
 
-            window = Nx.take(t, leading_window_indices[i])
+            i > Nx.size(t) - half_window ->
+              # We're indexing after the last full window on the right
+              Nx.take(t, trailing_window_indices[i - (Nx.size(t) - half_window + 1)])
 
-            indices = index_template + Nx.stack([current_window, 0])
-            updated = Nx.indexed_add(output, indices, window)
+            true ->
+              # Case where we can index a full window
+              t |> Nx.slice([i - half_window], [window_length])
+          end
 
-            {updated, i + stride, current_window + 1, t, index_template}
-
-          i > Nx.size(t) - half_window ->
-            # We're indexing after the last full window on the right
-            window = Nx.take(t, trailing_window_indices[i - (Nx.size(t) - half_window + 1)])
-
-            indices = index_template + Nx.stack([current_window, 0])
-            updated = Nx.indexed_add(output, indices, window)
-
-            {updated, i + stride, current_window + 1, t, index_template}
-
-          true ->
-            # Case where we can index a full window
-            indices = index_template + Nx.stack([current_window, 0])
-            updates = t |> Nx.slice([i - half_window], [window_length]) |> Nx.flatten()
-
-            updated = Nx.indexed_add(output, indices, updates)
-
-            {updated, i + stride, current_window + 1, t, index_template}
-        end
+        updated = Nx.put_slice(output, [current_window, 0], Nx.new_axis(window, 0))
+        {updated, i + stride, current_window + 1, t}
       end
 
     # Now we need to handle the tail-end of the windows,
