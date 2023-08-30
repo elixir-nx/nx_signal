@@ -355,6 +355,8 @@ defmodule NxSignal do
     output = Nx.broadcast(Nx.tensor(0, type: tensor.type), output_shape)
     {num_windows, _} = Nx.shape(output)
 
+    [output, tensor] = Nx.broadcast_vectors([output, tensor])
+
     {output, _, _, _} =
       while {output, i = 0, current_window = 0, t = tensor}, current_window < num_windows do
         window = t |> Nx.slice([i], [window_length])
