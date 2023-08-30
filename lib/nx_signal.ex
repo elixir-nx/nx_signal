@@ -352,19 +352,15 @@ defmodule NxSignal do
   end
 
   defnp as_windowed_apply(tensor, stride, output_shape, window_length) do
-    output = Nx.broadcast(Nx.tensor(0, type: tensor.type), output_shape)
-    {num_windows, _} = Nx.shape(output)
+    {num_windows, _} = output_shape
 
-    [output, tensor] = Nx.broadcast_vectors([output, tensor])
-
-    {output, _, _, _} =
-      while {output, i = 0, current_window = 0, t = tensor}, current_window < num_windows do
-        window = t |> Nx.slice([i], [window_length])
-        updated = Nx.put_slice(output, [current_window, 0], Nx.new_axis(window, 0))
-        {updated, i + stride, current_window + 1, t}
-      end
+    window_start = Nx.iota({num_windows}) * stride
+    window_start = Nx.vectorize(window_start, :window)
+    output = Nx.slice(tensor, [window_start], [window_length])
 
     output
+    |> Nx.devectorize(keep_names: false)
+    |> Nx.vectorize(tensor.vectorized_axes)
   end
 
   @doc """
