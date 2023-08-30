@@ -2,7 +2,7 @@
 
 ```elixir
 Mix.install([
-  {:nx_signal, "~> 0.1"},
+  {:nx_signal, "~> 0.2"},
   {:vega_lite, "~> 0.1.4"},
   {:kino_vega_lite, "~> 0.1.1"}
 ])
