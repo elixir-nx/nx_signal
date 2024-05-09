@@ -57,7 +57,7 @@ defmodule NxSignal.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:nx, "~> 0.6"},
+      {:nx, "~> 0.7"},
       {:ex_doc, "~> 0.29", only: :docs}
     ]
   end
