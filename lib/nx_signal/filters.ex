@@ -13,18 +13,20 @@ defmodule NxSignal.Filters do
     It must be compatible with the shape of the tensor.
   """
   @doc type: :filters
-  def median(t = %Nx.Tensor{shape: {length}}, opts) do
+  deftransform median(t = %Nx.Tensor{shape: {length}}, opts) do
     validate_median_opts!(t, opts)
     {kernel_length} = opts[:kernel_shape]
+
     median(Nx.reshape(t, {1, length}), kernel_shape: {1, kernel_length})
+    |> Nx.squeeze()
   end
 
-  def median(t = %Nx.Tensor{shape: {_h, _w}}, opts) do
+  deftransform median(t = %Nx.Tensor{shape: {_h, _w}}, opts) do
     validate_median_opts!(t, opts)
     median_n(t, opts)
   end
 
-  def median(_t, _opts), do: raise(ArgumentError, message: "tensor must be of rank 1 or 2")
+  deftransform median(_t, _opts), do: raise(ArgumentError, message: "tensor must be of rank 1 or 2")
 
   defnp median_n(t, opts) do
     kernel_shape = opts[:kernel_shape]
@@ -51,15 +53,14 @@ defmodule NxSignal.Filters do
          {i + 1, t, kernel_tensor, height, width}}
       end
 
-    Nx.squeeze(result)
+    result
   end
 
   defnp window_median(t, i, j, kernel_tensor) do
-    kernel_shape = Nx.shape(kernel_tensor)
-    kernel_dims = [elem(kernel_shape, 0), elem(kernel_shape, 1)]
+    {k0, k1} = Nx.shape(kernel_tensor)
 
-    padding_y = Nx.round((elem(kernel_shape, 0) - 1) / 2)
-    padding_x = Nx.round((elem(kernel_shape, 1) - 1) / 2)
+    padding_y = Nx.round((k0 - 1) / 2)
+    padding_x = Nx.round((k1 - 1) / 2)
 
     y_axis_start_idx =
       if i - padding_y <= 0 do
@@ -80,13 +81,13 @@ defmodule NxSignal.Filters do
     Nx.slice(
       t,
       [y_axis_start_idx, x_axis_start_idx],
-      kernel_dims
+      [k0, k1]
     )
     |> Nx.median()
   end
 
-  defn validate_median_opts!(t, opts) do
-    keyword!(opts, [:kernel_shape])
+  deftransformp validate_median_opts!(t, opts) do
+    Keyword.validate!(opts, [:kernel_shape])
 
     if Nx.rank(t) != Nx.rank(opts[:kernel_shape]) do
       raise ArgumentError, message: "kernel shape must be of the same rank as the tensor"
