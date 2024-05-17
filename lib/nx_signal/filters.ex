@@ -26,7 +26,8 @@ defmodule NxSignal.Filters do
     median_n(t, opts)
   end
 
-  deftransform median(_t, _opts), do: raise(ArgumentError, message: "tensor must be of rank 1 or 2")
+  deftransform median(_t, _opts),
+    do: raise(ArgumentError, message: "tensor must be of rank 1 or 2")
 
   defn median_n(t, opts) do
     {k0, k1} = opts[:kernel_shape]
