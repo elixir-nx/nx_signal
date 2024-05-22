@@ -40,7 +40,7 @@ defmodule NxSignal.Filters do
   deftransformp idx_tensor(t) do
     t
     |> Nx.axes()
-    |> Enum.map(&(Nx.iota(t.shape, axis: &1)))
+    |> Enum.map(&Nx.iota(t.shape, axis: &1))
     |> Nx.stack(axis: -1)
     |> Nx.reshape({:auto, length(Nx.axes(t))})
   end
@@ -48,7 +48,7 @@ defmodule NxSignal.Filters do
   deftransformp start_indices(t, idx_tensor) do
     t
     |> Nx.axes()
-    |> Enum.map(&(idx_tensor[&1]))
+    |> Enum.map(&idx_tensor[&1])
   end
 
   deftransformp kernel_lengths(kernel_shape), do: Tuple.to_list(kernel_shape)
