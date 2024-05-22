@@ -5,7 +5,7 @@ defmodule NxSignal.Filters do
   import Nx.Defn
 
   @doc ~S"""
-  Performs a median filter on a rank 1 or rank 2 tensor.
+  Performs a median filter on a tensor.
 
   ## Options
 
@@ -13,32 +13,16 @@ defmodule NxSignal.Filters do
     It must be compatible with the shape of the tensor.
   """
   @doc type: :filters
-  deftransform median(t = %Nx.Tensor{shape: {length}}, opts) do
+  defn median(t, opts) do
     validate_median_opts!(t, opts)
-    {kernel_length} = opts[:kernel_shape]
-
-    median(Nx.reshape(t, {1, length}), kernel_shape: {1, kernel_length})
-    |> Nx.squeeze()
-  end
-
-  deftransform median(t = %Nx.Tensor{shape: {_h, _w}}, opts) do
-    validate_median_opts!(t, opts)
-    median_n(t, opts)
-  end
-
-  deftransform median(_t, _opts),
-    do: raise(ArgumentError, message: "tensor must be of rank 1 or 2")
-
-  defn median_n(t, opts) do
-    {k0, k1} = opts[:kernel_shape]
 
     idx =
-      Nx.stack([Nx.iota(t.shape, axis: 0), Nx.iota(t.shape, axis: 1)], axis: -1)
-      |> Nx.reshape({:auto, 2})
+      t
+      |> idx_tensor()
       |> Nx.vectorize(:elements)
 
     t
-    |> Nx.slice([idx[0], idx[1]], [k0, k1])
+    |> Nx.slice(start_indices(t, idx), kernel_lengths(opts[:kernel_shape]))
     |> Nx.median()
     |> Nx.devectorize(keep_names: false)
     |> Nx.reshape(t.shape)
@@ -52,4 +36,20 @@ defmodule NxSignal.Filters do
       raise ArgumentError, message: "kernel shape must be of the same rank as the tensor"
     end
   end
+
+  deftransformp idx_tensor(t) do
+    t
+    |> Nx.axes()
+    |> Enum.map(&(Nx.iota(t.shape, axis: &1)))
+    |> Nx.stack(axis: -1)
+    |> Nx.reshape({:auto, length(Nx.axes(t))})
+  end
+
+  deftransformp start_indices(t, idx_tensor) do
+    t
+    |> Nx.axes()
+    |> Enum.map(&(idx_tensor[&1]))
+  end
+
+  deftransformp kernel_lengths(kernel_shape), do: Tuple.to_list(kernel_shape)
 end
