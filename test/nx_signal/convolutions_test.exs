@@ -10,5 +10,12 @@ defmodule NxSignal.ConvolutionTest do
       c = NxSignal.Convolution.convolve(a, b)
       assert c == Nx.tensor([3, 10, 22, 28, 32, 32, 23, 12])
     end
+
+    test "same" do
+      a = Nx.tensor([3, 4, 5])
+      b = Nx.tensor([1, 2, 3, 4])
+      c = NxSignal.Convolution.convolve(b, a)
+      assert c == Nx.tensor([10, 22, 34])
+    end
   end
 end
