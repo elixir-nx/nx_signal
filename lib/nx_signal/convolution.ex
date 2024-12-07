@@ -22,7 +22,6 @@ defmodule NxSignal.Convolution do
           Nx.reshape(kernel, {1, 1, m})
 
         {m, n} ->
-          nil
           Nx.reshape(kernel, {1, m, n})
 
         _ ->
@@ -35,7 +34,6 @@ defmodule NxSignal.Convolution do
           Nx.reshape(in2, {1, 1, m})
 
         {m, n} ->
-          nil
           Nx.reshape(in2, {1, m, n})
 
         _ ->
