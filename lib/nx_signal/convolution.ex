@@ -5,7 +5,10 @@ defmodule NxSignal.Convolution do
 
   import Nx.Defn
 
-  deftransform convolve(kernel, in2, mode \\ "full", method \\ "auto") do
+  deftransform convolve(in1, in2, mode \\ "full", method \\ "auto") do
+    kernel = in2
+    volume = in1
+
     axes =
       Nx.axes(kernel)
 
@@ -28,19 +31,26 @@ defmodule NxSignal.Convolution do
           kernel
       end
 
-    in2 =
-      case Nx.shape(in2) do
+    volume =
+      case Nx.shape(volume) do
         {m} ->
-          Nx.reshape(in2, {1, 1, m})
+          Nx.reshape(volume, {1, 1, m})
 
         {m, n} ->
-          Nx.reshape(in2, {1, m, n})
+          Nx.reshape(volume, {1, m, n})
 
         _ ->
-          in2
+          volume
       end
 
-    Nx.conv(kernel, in2)
+    opts =
+      if mode == "same" do
+        [padding: :same]
+      else
+        []
+      end
+
+    Nx.conv(volume, kernel, opts)
     |> Nx.squeeze()
   end
 end
