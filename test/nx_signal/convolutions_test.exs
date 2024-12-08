@@ -7,15 +7,15 @@ defmodule NxSignal.ConvolutionTest do
     test "basic" do
       a = Nx.tensor([3, 4, 5, 6, 5, 4])
       b = Nx.tensor([1, 2, 3])
-      c = NxSignal.Convolution.convolve(a, b, "same")
-      assert c == Nx.tensor([3, 10, 22, 28, 32, 32, 23, 12])
+      c = NxSignal.Convolution.convolve(a, b, mode: "full")
+      assert c == Nx.as_type(Nx.tensor([3, 10, 22, 28, 32, 32, 23, 12]), {:f, 32})
     end
 
     test "same" do
       a = Nx.tensor([3, 4, 5])
       b = Nx.tensor([1, 2, 3, 4])
-      c = NxSignal.Convolution.convolve(a, b, "same")
-      assert c == Nx.tensor([10, 22, 34])
+      c = NxSignal.Convolution.convolve(a, b, mode: "same")
+      assert c == Nx.as_type(Nx.tensor([10, 22, 34]), {:f, 32})
     end
   end
 end
