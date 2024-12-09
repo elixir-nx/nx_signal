@@ -10,6 +10,7 @@ defmodule NxSignal.Convolution do
     {volume, ^wrapped} = wrap_rank_zero(in1)
 
     mode = Keyword.get(opts, :mode, "full")
+    method = Keyword.get(opts, :method, "auto")
 
     axes =
       Nx.axes(kernel)
@@ -53,6 +54,37 @@ defmodule NxSignal.Convolution do
     |> then(fn x -> Nx.reshape(x, drop_first_two(Nx.shape(x))) end)
     |> unwrap_rank_zero(wrapped)
   end
+
+  def choose_conv_method(volume, kernel, opts \\ []) do
+    v_shape = Nx.type(volume)
+    k_shape = Nx.type(kernel)
+
+    mode = Keyword.get(opts, :mode, "full")
+
+    continue =
+      if any_ints(v_shape) || any_ints(k_shape) do
+        max_value = trunc(Nx.abs(Nx.reduce_max(volume))) * trunc(Nx.abs(Nx.reduce_max(kernel)))
+        max_value = max_value * trunc(min(Nx.flat_size(volume), Nx.flat_size(kernel)))
+        # Hard code mantissa bits
+        if max_value > 2 ** 52 - 1 do
+          "direct"
+        end
+      end
+
+    case continue do
+      nil ->
+        fftconv_faster?(volume, kernel, mode)
+
+      el ->
+        el
+    end
+  end
+
+  def fftconv_faster?(in1, in2, mode) do
+  end
+
+  def any_ints({inttype, _}) when inttype in [:u, :s], do: true
+  def any_ints(_), do: false
 
   defp wrap_rank_zero(i) do
     case Nx.shape(i) do
