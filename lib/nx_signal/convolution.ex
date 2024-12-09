@@ -48,11 +48,60 @@ defmodule NxSignal.Convolution do
           [padding: padding]
       end
 
-    Nx.conv(kernel, volume, opts)
-    |> Nx.reverse()
+    method =
+      case method do
+        "auto" -> choose_conv_method(volume, kernel, opts)
+        _ -> method
+      end
+
+    out =
+      case method do
+        "direct" ->
+          Nx.conv(kernel, volume, opts)
+          |> Nx.reverse()
+
+        "fft" ->
+          fftconvolve(volume, kernel, opts)
+      end
+
+    out
     |> shape_output(mode, Nx.shape(volume))
     |> then(fn x -> Nx.reshape(x, drop_first_two(Nx.shape(x))) end)
     |> unwrap_rank_zero(wrapped)
+  end
+
+  def fftconvolve(volume, kernel, opts \\ []) do
+    case {Nx.rank(volume), Nx.rank(kernel)} do
+      {1, 1} ->
+        Nx.product(volume, kernel)
+
+      {a, b} when a == b ->
+        s1 = Nx.shape(volume) |> Tuple.to_list()
+        s2 = Nx.shape(kernel) |> Tuple.to_list()
+
+        # Axes initialization
+        axes = 0..(Nx.rank(volume) - 1)
+
+        axes =
+          for a <- axes, Enum.at(s1, a) != 1 || Enum.at(s2, a) == 1 do
+            a
+          end
+
+        # Shape setup
+        shape =
+          for i <- 0..(length(s1) - 1) do
+            if i not in axes do
+              max(Enum.at(s1, i), Enum.at(s2, i))
+            else
+              Enum.at(s1, i) + Enum.at(s2, i) - 1
+            end
+          end
+
+      # Frequency domain conversion
+
+      _ ->
+        raise ArgumentError, message: "Rank of volume and kernel must be equial."
+    end
   end
 
   def choose_conv_method(volume, kernel, opts \\ []) do
