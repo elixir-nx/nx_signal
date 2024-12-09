@@ -6,8 +6,8 @@ defmodule NxSignal.Convolution do
   import Nx.Defn
 
   deftransform convolve(in1, in2, opts \\ []) do
-    kernel = in2
-    volume = in1
+    {kernel, wrapped} = wrap_rank_zero(in2)
+    {volume, ^wrapped} = wrap_rank_zero(in1)
 
     mode = Keyword.get(opts, :mode, "full")
 
@@ -51,6 +51,22 @@ defmodule NxSignal.Convolution do
     |> Nx.reverse()
     |> shape_output(mode, Nx.shape(volume))
     |> then(fn x -> Nx.reshape(x, drop_first_two(Nx.shape(x))) end)
+    |> unwrap_rank_zero(wrapped)
+  end
+
+  defp wrap_rank_zero(i) do
+    case Nx.shape(i) do
+      {} -> {Nx.reshape(i, {1}), true}
+      _ -> {i, false}
+    end
+  end
+
+  defp unwrap_rank_zero(tensor, true) do
+    tensor[0]
+  end
+
+  defp unwrap_rank_zero(tensor, _) do
+    tensor
   end
 
   defp drop_first_two(shape) do

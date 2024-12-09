@@ -38,5 +38,12 @@ defmodule NxSignal.ConvolutionTest do
                  Complex.new(5, 5)
                ])
     end
+
+    test "zero rank" do
+      a = Nx.tensor(1289)
+      b = Nx.tensor(4567)
+      c = NxSignal.Convolution.convolve(a, b)
+      assert c == Nx.as_type(Nx.multiply(a, b), {:f, 32})
+    end
   end
 end
