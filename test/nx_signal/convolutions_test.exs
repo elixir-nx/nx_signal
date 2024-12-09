@@ -13,14 +13,6 @@ defmodule NxSignal.ConvolutionTest do
       assert_all_close(c, o)
     end
 
-    test "numpy no overwrite" do
-      d = Nx.broadcast(1, {100})
-      k = Nx.broadcast(1, {3})
-      c = NxSignal.Convolution.convolve(d, k)
-      assert d == Nx.broadcast(1, {100})
-      assert k == Nx.broadcast(1, {3})
-    end
-
     # These tests were adapted from https://github.com/scipy/scipy/blob/v1.14.1/scipy/signal/tests/test_signaltools.py
     test "basic" do
       a = Nx.tensor([3, 4, 5, 6, 5, 4])

@@ -6,53 +6,94 @@ defmodule NxSignal.Convolution do
   import Nx.Defn
 
   deftransform convolve(in1, in2, opts \\ []) do
-    {kernel, wrapped} = wrap_rank_zero(in2)
-    {volume, ^wrapped} = wrap_rank_zero(in1)
-
     mode = Keyword.get(opts, :mode, "full")
-    method = Keyword.get(opts, :method, "auto")
+    # method = Keyword.get(opts, :method, "auto")
 
-    axes =
-      Nx.axes(kernel)
+    input_rank =
+      case {Nx.rank(in1), Nx.rank(in2)} do
+        {0, r} ->
+          r
 
-    kernel =
-      Nx.reverse(kernel, axes: axes)
+        {r, 0} ->
+          r
+
+        {r, r} ->
+          r
+
+        {r1, r2} ->
+          raise ArgumentError,
+                "NxSignal.convolve/3 requires both inputs to have the same rank or one of them to be a scalar, got #{r1} and #{r2}"
+      end
+
+    kernel = Nx.reverse(in2)
 
     kernel_shape =
-      Nx.shape(kernel)
-      |> Tuple.insert_at(0, 1)
-      |> Tuple.insert_at(0, 1)
+      case Nx.shape(kernel) do
+        {} -> {1, 1, 1, 1}
+        {n} -> {1, 1, 1, n}
+        shape -> List.to_tuple([1, 1 | Tuple.to_list(shape)])
+      end
 
     kernel = Nx.reshape(kernel, kernel_shape)
 
     volume_shape =
-      Nx.shape(volume)
-      |> Tuple.insert_at(0, 1)
-      |> Tuple.insert_at(0, 1)
+      case Nx.shape(in1) do
+        {} -> {1, 1, 1, 1}
+        {n} -> {1, 1, 1, n}
+        shape -> List.to_tuple([1, 1 | Tuple.to_list(shape)])
+      end
 
-    volume = Nx.reshape(volume, volume_shape)
+    volume = Nx.reshape(in1, volume_shape)
 
     opts =
       case mode do
         "same" ->
-          [padding: :same]
+          kernel_spatial_shape =
+            Nx.shape(kernel)
+            |> Tuple.to_list()
+            |> Enum.drop(2)
+
+          padding =
+            Enum.map(kernel_spatial_shape, fn k ->
+              pad_total = k - 1
+              # integer division for right side
+              pad_right = div(pad_total, 2)
+              # put the extra padding on the left
+              pad_left = pad_total - pad_right
+              {pad_left, pad_right}
+            end)
+
+          [padding: padding]
 
         "full" ->
-          padding =
-            Nx.shape(volume)
+          kernel_spatial_shape =
+            Nx.shape(kernel)
             |> Tuple.to_list()
-            |> Enum.slice(2..-1)
-            |> Enum.map(&(&1 - 1))
-            |> Enum.map(&{&1, &1})
+            |> Enum.drop(2)
+
+          padding =
+            Enum.map(kernel_spatial_shape, fn k ->
+              {k - 1, k - 1}
+            end)
 
           [padding: padding]
       end
 
-    Nx.conv(kernel, volume, opts)
-    |> Nx.reverse()
-    |> shape_output(mode, Nx.shape(volume))
-    |> then(fn x -> Nx.reshape(x, drop_first_two(Nx.shape(x))) end)
-    |> unwrap_rank_zero(wrapped)
+    squeeze_axes =
+      case input_rank do
+        0 ->
+          [0, 1, 2, 3]
+
+        1 ->
+          [0, 1, 2]
+
+        _ ->
+          [0, 1]
+      end
+
+    volume
+    |> Nx.conv(kernel, opts)
+    |> Nx.squeeze(axes: squeeze_axes)
   end
 
   def choose_conv_method(volume, kernel, opts \\ []) do
@@ -195,39 +236,4 @@ defmodule NxSignal.Convolution do
 
   def any_ints({inttype, _}) when inttype in [:u, :s], do: true
   def any_ints(_), do: false
-
-  defp wrap_rank_zero(i) do
-    case Nx.shape(i) do
-      {} -> {Nx.reshape(i, {1}), true}
-      _ -> {i, false}
-    end
-  end
-
-  defp unwrap_rank_zero(tensor, true) do
-    tensor[0]
-  end
-
-  defp unwrap_rank_zero(tensor, _) do
-    tensor
-  end
-
-  defp drop_first_two(shape) do
-    shape
-    |> Tuple.to_list()
-    |> Enum.slice(2..-1)
-    |> List.to_tuple()
-  end
-
-  defp shape_output(out, "full", _shape) do
-    out
-  end
-
-  defp shape_output(out, "same", shape) do
-    ac =
-      shape
-      |> Tuple.to_list()
-      |> Enum.map(&(0..(&1 - 1)))
-
-    out[ac]
-  end
 end
