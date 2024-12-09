@@ -24,5 +24,19 @@ defmodule NxSignal.ConvolutionTest do
       c = NxSignal.Convolution.convolve(a, b, mode: "same")
       assert c == Nx.as_type(Nx.tensor([10, 22, 22]), {:f, 32})
     end
+
+    test "complex" do
+      a = Nx.tensor([Complex.new(1, 1), Complex.new(2, 1), Complex.new(3, 1)])
+      b = Nx.tensor([Complex.new(1, 1), Complex.new(2, 1)])
+      c = NxSignal.Convolution.convolve(a, b)
+
+      assert c ==
+               Nx.tensor([
+                 Complex.new(0, 2),
+                 Complex.new(2, 6),
+                 Complex.new(5, 8),
+                 Complex.new(5, 5)
+               ])
+    end
   end
 end

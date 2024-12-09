@@ -15,11 +15,7 @@ defmodule NxSignal.Convolution do
       Nx.axes(kernel)
 
     kernel =
-      if Nx.Type.complex?(Nx.type(kernel)) do
-        Nx.conjugate(Nx.reverse(kernel, axes: axes))
-      else
-        Nx.reverse(kernel, axes: axes)
-      end
+      Nx.reverse(kernel, axes: axes)
 
     kernel_shape =
       Nx.shape(kernel)
