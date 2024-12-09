@@ -21,29 +21,19 @@ defmodule NxSignal.Convolution do
         Nx.reverse(kernel, axes: axes)
       end
 
-    kernel =
-      case Nx.shape(kernel) do
-        {m} ->
-          Nx.reshape(kernel, {1, 1, m})
+    kernel_shape =
+      Nx.shape(kernel)
+      |> Tuple.insert_at(0, 1)
+      |> Tuple.insert_at(0, 1)
 
-        {m, n} ->
-          Nx.reshape(kernel, {1, m, n})
+    kernel = Nx.reshape(kernel, kernel_shape)
 
-        _ ->
-          kernel
-      end
+    volume_shape =
+      Nx.shape(volume)
+      |> Tuple.insert_at(0, 1)
+      |> Tuple.insert_at(0, 1)
 
-    volume =
-      case Nx.shape(volume) do
-        {m} ->
-          Nx.reshape(volume, {1, 1, m})
-
-        {m, n} ->
-          Nx.reshape(volume, {1, m, n})
-
-        _ ->
-          volume
-      end
+    volume = Nx.reshape(volume, volume_shape)
 
     opts =
       case mode do
@@ -64,7 +54,14 @@ defmodule NxSignal.Convolution do
     Nx.conv(kernel, volume, opts)
     |> Nx.reverse()
     |> shape_output(mode, Nx.shape(volume))
-    |> Nx.squeeze()
+    |> then(fn x -> Nx.reshape(x, drop_first_two(Nx.shape(x))) end)
+  end
+
+  defp drop_first_two(shape) do
+    shape
+    |> Tuple.to_list()
+    |> Enum.slice(2..-1)
+    |> List.to_tuple()
   end
 
   defp shape_output(out, "full", _shape) do

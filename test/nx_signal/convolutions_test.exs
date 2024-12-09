@@ -17,5 +17,9 @@ defmodule NxSignal.ConvolutionTest do
       c = NxSignal.Convolution.convolve(a, b, mode: "same")
       assert c == Nx.as_type(Nx.tensor([10, 22, 34]), {:f, 32})
     end
+
+    # test "same eq" do
+    #   a = Nx.tensor([3, 4, 5])
+    # end
   end
 end
