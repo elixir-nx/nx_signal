@@ -4,6 +4,7 @@ defmodule NxSignal.ConvolutionTest do
   import NxSignal.Helpers
 
   describe "convolve/4" do
+    # These tests were adapted from https://github.com/numpy/numpy/blob/v2.1.0/numpy/_core/tests/test_numeric.py#L3573
     test "numpy object" do
       d = Nx.tensor(List.duplicate(1.0, 100))
       k = Nx.tensor(List.duplicate(1.0, 3))
