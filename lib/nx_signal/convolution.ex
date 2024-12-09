@@ -55,9 +55,9 @@ defmodule NxSignal.Convolution do
           # Todo impl
       end
 
-    # Nx.conv(volume, kernel, opts)
-    Nx.conv(Nx.reverse(kernel), Nx.reverse(volume), opts)
-    |> shape_output(Nx.shape(Nx.reverse(volume)))
+    Nx.conv(kernel, volume, opts)
+    |> Nx.reverse()
+    |> shape_output(Nx.shape(volume))
     |> Nx.squeeze()
   end
 
