@@ -51,17 +51,27 @@ defmodule NxSignal.Convolution do
           [padding: :same]
 
         "full" ->
-          nil
-          # Todo impl
+          padding =
+            Nx.shape(volume)
+            |> Tuple.to_list()
+            |> Enum.slice(2..-1)
+            |> Enum.map(&(&1 - 1))
+            |> Enum.map(&{&1, &1})
+
+          [padding: padding]
       end
 
     Nx.conv(kernel, volume, opts)
     |> Nx.reverse()
-    |> shape_output(Nx.shape(volume))
+    |> shape_output(mode, Nx.shape(volume))
     |> Nx.squeeze()
   end
 
-  defp shape_output(out, shape) do
+  defp shape_output(out, "full", _shape) do
+    out
+  end
+
+  defp shape_output(out, "same", shape) do
     ac =
       shape
       |> Tuple.to_list()
