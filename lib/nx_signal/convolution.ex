@@ -7,7 +7,7 @@ defmodule NxSignal.Convolution do
 
   deftransform convolve(in1, in2, opts \\ []) do
     mode = Keyword.get(opts, :mode, "full")
-    # method = Keyword.get(opts, :method, "auto")
+    method = Keyword.get(opts, :method, "direct")
 
     input_rank =
       case {Nx.rank(in1), Nx.rank(in2)} do
@@ -79,6 +79,15 @@ defmodule NxSignal.Convolution do
           [padding: padding]
       end
 
+    out =
+      case method do
+        "direct" ->
+          Nx.conv(volume, kernel, opts)
+
+        "fft" ->
+          fftconvolve(volume, kernel, opts)
+      end
+
     squeeze_axes =
       case input_rank do
         0 ->
@@ -91,33 +100,40 @@ defmodule NxSignal.Convolution do
           [0, 1]
       end
 
-    volume
-    |> Nx.conv(kernel, opts)
-    |> Nx.squeeze(axes: squeeze_axes)
+    Nx.squeeze(out, axes: squeeze_axes)
   end
 
-  def choose_conv_method(volume, kernel, opts \\ []) do
-    v_shape = Nx.type(volume)
-    k_shape = Nx.type(kernel)
+  def fftconvolve(volume, kernel, opts \\ []) do
+    case {Nx.rank(volume), Nx.rank(kernel)} do
+      {1, 1} ->
+        Nx.product(volume, kernel)
 
-    mode = Keyword.get(opts, :mode, "full")
+      {a, b} when a == b ->
+        s1 = Nx.shape(volume) |> Tuple.to_list()
+        s2 = Nx.shape(kernel) |> Tuple.to_list()
 
-    continue =
-      if any_ints(v_shape) || any_ints(k_shape) do
-        max_value = trunc(Nx.abs(Nx.reduce_max(volume))) * trunc(Nx.abs(Nx.reduce_max(kernel)))
-        max_value = max_value * trunc(min(Nx.flat_size(volume), Nx.flat_size(kernel)))
-        # Hard code mantissa bits
-        if max_value > 2 ** 52 - 1 do
-          "direct"
-        end
-      end
+        # Axes initialization
+        axes = 0..(Nx.rank(volume) - 1)
 
-    case continue do
-      nil ->
-        fftconv_faster?(volume, kernel, mode)
+        axes =
+          for a <- axes, Enum.at(s1, a) != 1 || Enum.at(s2, a) == 1 do
+            a
+          end
 
-      el ->
-        el
+        # Shape setup
+        shape =
+          for i <- 0..(length(s1) - 1) do
+            if i not in axes do
+              max(Enum.at(s1, i), Enum.at(s2, i))
+            else
+              Enum.at(s1, i) + Enum.at(s2, i) - 1
+            end
+          end
+
+      # Frequency domain conversion
+
+      _ ->
+        raise ArgumentError, message: "Rank of volume and kernel must be equial."
     end
   end
 
