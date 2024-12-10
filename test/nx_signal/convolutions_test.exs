@@ -68,9 +68,7 @@ defmodule NxSignal.ConvolutionTest do
       c = NxSignal.Transforms.fft_nd(a, axes: [0, 1], lengths: [2, 3])
 
       z =
-        Nx.tensor([[21, Complex.new(-3, 1.732), Complex.new(-3, 1.732)], [-9, 0, 0]])
-
-      IO.inspect(Nx.subtract(c, z))
+        Nx.tensor([[21, Complex.new(-3, 1.732), Complex.new(-3, -1.732)], [-9, 0, 0]])
 
       assert_all_close(
         c,
