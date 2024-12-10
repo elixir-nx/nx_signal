@@ -87,6 +87,9 @@ defmodule NxSignal.Convolution do
             end)
 
           [padding: padding]
+
+        "valid" ->
+          []
       end
 
     out = Nx.conv(volume, kernel, opts)
@@ -103,8 +106,22 @@ defmodule NxSignal.Convolution do
           [0, 1]
       end
 
-    Nx.squeeze(out, axes: squeeze_axes)
+    out
+    |> Nx.squeeze(axes: squeeze_axes)
+    |> clip_valid(Nx.shape(volume), Nx.shape(kernel), opts[:mode])
   end
+
+  defp clip_valid(out, in1_shape, in2_shape, "valid") do
+    select =
+      [in1_shape, in2_shape]
+      |> Enum.zip_with(fn [i, j] ->
+        0..(i - j)
+      end)
+
+    out[select]
+  end
+
+  defp clip_valid(out, _, _, _), do: out
 
   deftransform fftconvolve(in1, in2, opts \\ []) do
     case {Nx.rank(in1), Nx.rank(in2)} do
