@@ -94,23 +94,53 @@ defmodule NxSignal.ConvolutionTest do
     end
 
     test "broadcastable" do
-      a = 0..26 |> Enum.to_list() |> Nx.tensor() |> Nx.reshape({3, 3, 3})
+      a = Nx.iota({3, 3, 3})
+      b = Nx.iota({1, 1, 3})
 
-      b = 0..2 |> Enum.to_list() |> Nx.tensor()
+      x = NxSignal.Convolution.convolve(a, b, method: "direct")
+      y = NxSignal.Convolution.convolve(a, b, method: "fft")
 
-      for i <- 0..2 do
-        b_shape = [1, 1, 1]
-        b_shape = List.replace_at(b_shape, i, 3)
-        b_shape = List.to_tuple(b_shape)
+      expected =
+        Nx.tensor([
+          [[0, 0, 1, 4, 4], [0, 3, 10, 13, 10], [0, 6, 19, 22, 16]],
+          [[0, 9, 28, 31, 22], [0, 12, 37, 40, 28], [0, 15, 46, 49, 34]],
+          [[0, 18, 55, 58, 40], [0, 21, 64, 67, 46], [0, 24, 73, 76, 52]]
+        ])
 
-        x =
-          NxSignal.Convolution.convolve(a, Nx.reshape(b, b_shape), method: "direct")
+      assert_all_close(x, expected)
+      assert_all_close(y, expected)
 
-        y =
-          NxSignal.Convolution.convolve(a, Nx.reshape(b, b_shape), method: "fft")
+      b = Nx.reshape(b, {1, 3, 1})
 
-        assert_all_close(x, y)
-      end
+      x = NxSignal.Convolution.convolve(a, b, method: "direct")
+      y = NxSignal.Convolution.convolve(a, b, method: "fft")
+
+      expected =
+        Nx.tensor([
+          [[0, 0, 0], [0, 1, 2], [3, 6, 9], [12, 15, 18], [12, 14, 16]],
+          [[0, 0, 0], [9, 10, 11], [30, 33, 36], [39, 42, 45], [30, 32, 34]],
+          [[0, 0, 0], [18, 19, 20], [57, 60, 63], [66, 69, 72], [48, 50, 52]]
+        ])
+
+      assert_all_close(x, expected)
+      assert_all_close(y, expected)
+
+      b = Nx.reshape(b, {3, 1, 1})
+
+      x = NxSignal.Convolution.convolve(a, b, method: "direct")
+      y = NxSignal.Convolution.convolve(a, b, method: "fft")
+
+      expected =
+        Nx.tensor([
+          [[0, 0, 0], [0, 0, 0], [0, 0, 0]],
+          [[0, 1, 2], [3, 4, 5], [6, 7, 8]],
+          [[9, 12, 15], [18, 21, 24], [27, 30, 33]],
+          [[36, 39, 42], [45, 48, 51], [54, 57, 60]],
+          [[36, 38, 40], [42, 44, 46], [48, 50, 52]]
+        ])
+
+      assert_all_close(x, expected)
+      assert_all_close(y, expected)
     end
   end
 end
