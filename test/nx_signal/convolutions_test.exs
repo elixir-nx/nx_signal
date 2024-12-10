@@ -163,5 +163,123 @@ defmodule NxSignal.ConvolutionTest do
 
       assert c == d
     end
+
+    test "input swappiing" do
+      small =
+        0..(8 - 1)
+        |> Enum.to_list()
+        |> Nx.tensor()
+        |> Nx.reshape({2, 2, 2})
+
+      big =
+        0..(27 - 1)
+        |> Enum.to_list()
+        |> Nx.tensor()
+        |> Nx.reshape({3, 3, 3})
+
+      big_add =
+        0..(27 - 1)
+        |> Enum.to_list()
+        |> Enum.reverse()
+        |> Nx.tensor()
+        |> Nx.reshape({3, 3, 3})
+
+      big = Nx.add(big, big_add)
+
+      out_array =
+        [
+          [
+            [Complex.new(0, 0), Complex.new(26, 0), Complex.new(25, 1), Complex.new(24, 2)],
+            [Complex.new(52, 0), Complex.new(151, 5), Complex.new(145, 11), Complex.new(93, 11)],
+            [Complex.new(46, 6), Complex.new(133, 23), Complex.new(127, 29), Complex.new(81, 23)],
+            [Complex.new(40, 12), Complex.new(98, 32), Complex.new(93, 37), Complex.new(54, 24)]
+          ],
+          [
+            [
+              Complex.new(104, 0),
+              Complex.new(247, 13),
+              Complex.new(237, 23),
+              Complex.new(135, 21)
+            ],
+            [
+              Complex.new(282, 30),
+              Complex.new(632, 96),
+              Complex.new(604, 124),
+              Complex.new(330, 86)
+            ],
+            [
+              Complex.new(246, 66),
+              Complex.new(548, 180),
+              Complex.new(520, 208),
+              Complex.new(282, 134)
+            ],
+            [
+              Complex.new(142, 66),
+              Complex.new(307, 161),
+              Complex.new(289, 179),
+              Complex.new(153, 107)
+            ]
+          ],
+          [
+            [
+              Complex.new(68, 36),
+              Complex.new(157, 103),
+              Complex.new(147, 113),
+              Complex.new(81, 75)
+            ],
+            [
+              Complex.new(174, 138),
+              Complex.new(380, 348),
+              Complex.new(352, 376),
+              Complex.new(186, 230)
+            ],
+            [
+              Complex.new(138, 174),
+              Complex.new(296, 432),
+              Complex.new(268, 460),
+              Complex.new(138, 278)
+            ],
+            [
+              Complex.new(70, 138),
+              Complex.new(145, 323),
+              Complex.new(127, 341),
+              Complex.new(63, 197)
+            ]
+          ],
+          [
+            [
+              Complex.new(32, 72),
+              Complex.new(68, 166),
+              Complex.new(59, 175),
+              Complex.new(30, 100)
+            ],
+            [
+              Complex.new(68, 192),
+              Complex.new(139, 433),
+              Complex.new(117, 455),
+              Complex.new(57, 255)
+            ],
+            [
+              Complex.new(38, 222),
+              Complex.new(73, 499),
+              Complex.new(51, 521),
+              Complex.new(21, 291)
+            ],
+            [
+              Complex.new(12, 144),
+              Complex.new(20, 318),
+              Complex.new(7, 331),
+              Complex.new(0, 182)
+            ]
+          ]
+        ]
+
+      assert convolve(small, big, mode: "full") == out_array
+      assert convolve(big, small, mode: "full") == out_array
+      assert convolve(small, big, mode: "same") == out_array[[1..3, 1..3, 1..3]]
+      assert convolve(big, small, mode: "same") == out_array[[0..3, 0..3, 0..3]]
+      assert convolve(small, big, mode: "valid") == out_array[[1..3, 1..3, 1..3]]
+      assert convolve(big, small, mode: "valid") == out_array[[1..3, 1..3, 1..3]]
+    end
   end
 end
