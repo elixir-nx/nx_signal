@@ -72,8 +72,13 @@ defmodule NxSignal.ConvolutionTest do
         b_shape = [1, 1, 1]
         b_shape = List.replace_at(b_shape, i, 3)
         b_shape = List.to_tuple(b_shape)
-        x = NxSignal.Convolution.convolve(a, Nx.reshape(b, b_shape), method: "direct")
-        y = NxSignal.Convolution.convolve(a, Nx.reshape(b, b_shape), method: "fft")
+
+        x =
+          NxSignal.Convolution.convolve(a, Nx.reshape(b, b_shape), method: "direct")
+
+        y =
+          NxSignal.Convolution.convolve(a, Nx.reshape(b, b_shape), method: "fft")
+
         assert_all_close(x, y)
       end
     end

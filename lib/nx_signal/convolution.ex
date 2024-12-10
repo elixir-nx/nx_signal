@@ -4,6 +4,7 @@ defmodule NxSignal.Convolution do
   """
 
   import Nx.Defn
+  import NxSignal.Transforms
 
   deftransform convolve(in1, in2, opts \\ []) do
     mode = Keyword.get(opts, :mode, "full")
@@ -130,7 +131,38 @@ defmodule NxSignal.Convolution do
             end
           end
 
-      # Frequency domain conversion
+        IO.inspect(shape)
+
+        # Frequency domain conversion
+        # IO.inspect([volume, kernel])
+
+        padding_s1 =
+          Enum.zip(shape, s1)
+          |> Enum.drop(2)
+          |> Enum.map(fn {x, y} -> {x - y, 0, 0} end)
+
+        padding_s1 =
+          [{0, 0, 0}, {0, 0, 0} | padding_s1]
+          |> IO.inspect()
+
+        volume = Nx.pad(volume, 0, padding_s1)
+
+        padding_s2 =
+          Enum.zip(shape, s2)
+          |> Enum.drop(2)
+          |> Enum.map(fn {x, y} -> {x - y, 0, 0} end)
+
+        padding_s2 =
+          [{0, 0, 0}, {0, 0, 0} | padding_s2]
+          |> IO.inspect()
+
+        kernel = Nx.pad(kernel, 0, padding_s2)
+
+        IO.inspect([s1, s2])
+
+        sp1 = fft_nd(volume, ignore: [0, 1])
+        sp2 = fft_nd(kernel, ignore: [0, 1])
+        ifft_nd(Nx.multiply(sp1, sp2), ignore: [0, 1])
 
       _ ->
         raise ArgumentError, message: "Rank of volume and kernel must be equial."
