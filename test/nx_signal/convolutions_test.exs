@@ -76,6 +76,23 @@ defmodule NxSignal.ConvolutionTest do
       )
     end
 
+    test "fft_nd with padding" do
+      a = Nx.tensor([[1, 2, 3], [4, 5, 6]])
+      c = NxSignal.Transforms.fft_nd(a, axes: [0, 1], lengths: [3, 3])
+
+      z =
+        Nx.tensor([
+          [2.1e1, Complex.new(-3, 1.732), Complex.new(-3, -1.732)],
+          [Complex.new(-1.5, -12.99), Complex.new(-1.11e-16, 1.732), Complex.new(-1.5, 0.866)],
+          [Complex.new(-1.5, 12.99), Complex.new(-1.5, -0.866), Complex.new(-1.11e-16, -1.732)]
+        ])
+
+      assert_all_close(
+        c,
+        z
+      )
+    end
+
     test "broadcastable" do
       a = 0..26 |> Enum.to_list() |> Nx.tensor() |> Nx.reshape({3, 3, 3})
 
