@@ -117,7 +117,7 @@ defmodule NxSignal.Convolution do
         axes = 0..(Nx.rank(volume) - 1)
 
         axes =
-          for a <- axes, Enum.at(s1, a) == 1 || Enum.at(s2, a) == 1 do
+          for a <- axes, Enum.at(s1, a) != 1 || Enum.at(s2, a) != 1 do
             a
           end
 
