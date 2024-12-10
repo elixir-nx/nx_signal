@@ -35,6 +35,28 @@ defmodule NxSignal.Convolution do
                 "NxSignal.convolve/3 requires both inputs to have the same rank or one of them to be a scalar, got #{r1} and #{r2}"
       end
 
+    zipped = Enum.zip(Tuple.to_list(Nx.shape(in1)), Tuple.to_list(Nx.shape(in2)))
+
+    ok1 = Enum.all?(for {i, j} <- zipped, do: i >= j)
+    ok2 = Enum.all?(for {i, j} <- zipped, do: i <= j)
+
+    {in1, in2} =
+      if opts[:mode] == "valid" do
+        if not (ok1 or ok2) do
+          raise ArgumentError,
+            message:
+              "For 'valid' mode, one must be at least as large as the other in every dimension"
+        end
+
+        if not ok1 do
+          {in2, in1}
+        else
+          {in1, in2}
+        end
+      else
+        {in1, in2}
+      end
+
     kernel = Nx.reverse(in2)
 
     kernel_shape =
@@ -89,7 +111,7 @@ defmodule NxSignal.Convolution do
           [padding: padding]
 
         "valid" ->
-          []
+          [padding: :valid]
       end
 
     out = Nx.conv(volume, kernel, opts)
