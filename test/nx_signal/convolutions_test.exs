@@ -2,6 +2,8 @@ defmodule NxSignal.ConvolutionTest do
   use NxSignal.Case
   # doctest NxSignal.Filters
   import NxSignal.Helpers
+  alias NxSignal.Convolution
+  import NxSignal.Convolution, [:convolve, 3]
 
   describe "convolve/4" do
     # These tests were adapted from https://github.com/numpy/numpy/blob/v2.1.0/numpy/_core/tests/test_numeric.py#L3573
@@ -141,6 +143,25 @@ defmodule NxSignal.ConvolutionTest do
 
       assert_all_close(x, expected)
       assert_all_close(y, expected)
+    end
+
+    test "single element" do
+      a = Nx.tensor([4967])
+      b = Nx.tensor([3920])
+      c = convolve(a, b)
+      assert c == Nx.as_type(Nx.multiply(a, b), {:f, 32})
+    end
+
+    test "2d arrays" do
+      a = Nx.tensor([[1, 2, 3], [3, 4, 5]])
+      b = Nx.tensor([[2, 3, 4], [4, 5, 6]])
+      c = convolve(a, b)
+
+      d =
+        Nx.tensor([[2, 7, 16, 17, 12], [10, 30, 62, 58, 38], [12, 31, 58, 49, 30]])
+        |> Nx.as_type({:f, 32})
+
+      assert c == d
     end
   end
 end
