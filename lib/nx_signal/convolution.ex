@@ -7,9 +7,18 @@ defmodule NxSignal.Convolution do
   import NxSignal.Transforms
 
   deftransform convolve(in1, in2, opts \\ []) do
-    mode = Keyword.get(opts, :mode, "full")
-    method = Keyword.get(opts, :method, "direct")
+    opts = Keyword.validate!(opts, mode: "full", method: "direct")
 
+    case opts[:method] do
+      "direct" ->
+        direct_convolve(in1, in2, opts)
+
+      "fft" ->
+        fftconvolve(in1, in2, opts)
+    end
+  end
+
+  defp direct_convolve(in1, in2, opts) do
     input_rank =
       case {Nx.rank(in1), Nx.rank(in2)} do
         {0, r} ->
@@ -47,7 +56,7 @@ defmodule NxSignal.Convolution do
     volume = Nx.reshape(in1, volume_shape)
 
     opts =
-      case mode do
+      case opts[:mode] do
         "same" ->
           kernel_spatial_shape =
             Nx.shape(kernel)
@@ -80,14 +89,7 @@ defmodule NxSignal.Convolution do
           [padding: padding]
       end
 
-    out =
-      case method do
-        "direct" ->
-          Nx.conv(volume, kernel, opts)
-
-        "fft" ->
-          fftconvolve(volume, kernel, opts)
-      end
+    out = Nx.conv(volume, kernel, opts)
 
     squeeze_axes =
       case input_rank do
@@ -104,55 +106,39 @@ defmodule NxSignal.Convolution do
     Nx.squeeze(out, axes: squeeze_axes)
   end
 
-  def fftconvolve(volume, kernel, opts \\ []) do
-    case {Nx.rank(volume), Nx.rank(kernel)} do
+  deftransform fftconvolve(in1, in2, opts \\ []) do
+    case {Nx.rank(in1), Nx.rank(in2)} do
       {1, 1} ->
-        Nx.product(volume, kernel)
+        Nx.product(in1, in2)
 
       {a, b} when a == b ->
-        s1 = Nx.shape(volume) |> Tuple.to_list()
-        s2 = Nx.shape(kernel) |> Tuple.to_list()
+        s1 = Nx.shape(in1) |> Tuple.to_list()
+        s2 = Nx.shape(in2) |> Tuple.to_list()
 
-        # Axes initialization
-        axes = 0..(Nx.rank(volume) - 1)
-
-        axes =
-          for a <- axes, Enum.at(s1, a) != 1 || Enum.at(s2, a) != 1 do
-            a
-          end
-
-        # Shape setup
-        shape =
-          for i <- 0..(length(s1) - 1) do
-            if i not in axes do
-              max(Enum.at(s1, i), Enum.at(s2, i))
-            else
-              Enum.at(s1, i) + Enum.at(s2, i) - 1
+        lengths =
+          Enum.zip_with(s1, s2, fn ax1, ax2 ->
+            case opts[:mode] do
+              "full" -> ax1 + ax2 - 1
+              "same" -> ax1
             end
-          end
+          end)
 
-        shape =
-          shape
-          |> Enum.drop(2)
+        dbg(lengths)
 
-        # Frequency domain conversion
-        # IO.inspect([volume, kernel])
+        sp1 =
+          fft_nd(in1, axes: Nx.axes(in1), lengths: lengths)
 
-        sp1 = fft_nd(volume, axes: Nx.axes(volume) |> Enum.drop(2), lengths: shape)
-        sp2 = fft_nd(kernel, axes: Nx.axes(kernel) |> Enum.drop(2), lengths: shape)
-        # IO.inspect([Nx.shape(sp1), Nx.shape(sp2)])
-        IO.inspect(sp1)
-        IO.inspect(sp2)
+        sp2 =
+          fft_nd(in2, axes: Nx.axes(in2), lengths: lengths)
 
-        c =
-          Nx.multiply(sp1, sp2)
+        dbg({sp1, sp2})
 
-        # |> IO.inspect()
+        c = Nx.multiply(sp1, sp2)
 
-        ifft_nd(c, axes: Nx.axes(c) |> Enum.drop(2), lengths: shape)
+        ifft_nd(c, axes: Nx.axes(c))
 
       _ ->
-        raise ArgumentError, message: "Rank of volume and kernel must be equial."
+        raise ArgumentError, message: "Rank of in1 and in2 must be equal."
     end
   end
 end
