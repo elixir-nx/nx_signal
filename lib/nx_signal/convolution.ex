@@ -131,39 +131,24 @@ defmodule NxSignal.Convolution do
             end
           end
 
-        IO.inspect(shape)
+        shape =
+          shape
+          |> Enum.drop(2)
 
         # Frequency domain conversion
         # IO.inspect([volume, kernel])
 
-        padding_s1 =
-          Enum.zip(shape, s1)
-          |> Enum.drop(2)
-          |> Enum.map(fn {x, y} -> {x - y, 0, 0} end)
+        sp1 = fft_nd(volume, axes: Nx.axes(volume) |> Enum.drop(2), lengths: shape)
+        sp2 = fft_nd(kernel, axes: Nx.axes(kernel) |> Enum.drop(2), lengths: shape)
+        IO.inspect([Nx.shape(sp1), Nx.shape(sp2)])
 
-        padding_s1 =
-          [{0, 0, 0}, {0, 0, 0} | padding_s1]
-          |> IO.inspect()
+        c =
+          Nx.multiply(sp1, sp2)
 
-        volume = Nx.pad(volume, 0, padding_s1)
+        ifft_nd(c, axes: Nx.axes(c) |> Enum.drop(2), lengths: shape)
+        |> IO.inspect()
 
-        padding_s2 =
-          Enum.zip(shape, s2)
-          |> Enum.drop(2)
-          |> Enum.map(fn {x, y} -> {x - y, 0, 0} end)
-
-        padding_s2 =
-          [{0, 0, 0}, {0, 0, 0} | padding_s2]
-          |> IO.inspect()
-
-        kernel = Nx.pad(kernel, 0, padding_s2)
-
-        IO.inspect([s1, s2])
-
-        sp1 = fft_nd(volume, axes: Nx.axes(volume))
-        sp2 = fft_nd(kernel, axes: Nx.axes(kernel))
-        c = Nx.multiply(sp1, sp2)
-        ifft_nd(c, axes: Nx.axes(c))
+      # |> IO.inspect()
 
       _ ->
         raise ArgumentError, message: "Rank of volume and kernel must be equial."
