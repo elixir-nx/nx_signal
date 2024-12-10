@@ -123,19 +123,26 @@ defmodule NxSignal.Convolution do
             end
           end)
 
-        dbg(lengths)
+        axes =
+          [s1, s2, Nx.axes(in1)]
+          |> Enum.zip_with(fn [ax1, ax2, axis] ->
+            if ax1 != 1 and ax2 != 1 do
+              axis
+            end
+          end)
+          |> Enum.filter(& &1)
+
+        lengths = Enum.map(axes, &Enum.fetch!(lengths, &1))
 
         sp1 =
-          fft_nd(in1, axes: Nx.axes(in1), lengths: lengths)
+          fft_nd(in1, axes: axes, lengths: lengths)
 
         sp2 =
-          fft_nd(in2, axes: Nx.axes(in2), lengths: lengths)
-
-        dbg({sp1, sp2})
+          fft_nd(in2, axes: axes, lengths: lengths)
 
         c = Nx.multiply(sp1, sp2)
 
-        ifft_nd(c, axes: Nx.axes(c))
+        ifft_nd(c, axes: axes)
 
       _ ->
         raise ArgumentError, message: "Rank of in1 and in2 must be equal."
