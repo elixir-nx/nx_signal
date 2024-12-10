@@ -164,7 +164,7 @@ defmodule NxSignal.ConvolutionTest do
       assert c == d
     end
 
-    test "input swappiing" do
+    test "input swapping" do
       small =
         0..(8 - 1)
         |> Enum.to_list()
@@ -174,6 +174,7 @@ defmodule NxSignal.ConvolutionTest do
       big =
         0..(27 - 1)
         |> Enum.to_list()
+        |> Enum.map(&Complex.new(0, &1))
         |> Nx.tensor()
         |> Nx.reshape({3, 3, 3})
 
@@ -273,13 +274,14 @@ defmodule NxSignal.ConvolutionTest do
             ]
           ]
         ]
+        |> Nx.tensor()
 
       assert convolve(small, big, mode: "full") == out_array
       assert convolve(big, small, mode: "full") == out_array
-      assert convolve(small, big, mode: "same") == out_array[[1..3, 1..3, 1..3]]
-      assert convolve(big, small, mode: "same") == out_array[[0..3, 0..3, 0..3]]
-      assert convolve(small, big, mode: "valid") == out_array[[1..3, 1..3, 1..3]]
-      assert convolve(big, small, mode: "valid") == out_array[[1..3, 1..3, 1..3]]
+      assert convolve(small, big, mode: "same") == out_array[[1..2, 1..2, 1..2]]
+      assert convolve(big, small, mode: "same") == out_array[[0..2, 0..2, 0..2]]
+      assert convolve(small, big, mode: "valid") == out_array[[1..2, 1..2, 1..2]]
+      assert convolve(big, small, mode: "valid") == out_array[[1..2, 1..2, 1..2]]
     end
   end
 end
