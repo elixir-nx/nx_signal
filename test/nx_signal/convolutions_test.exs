@@ -283,5 +283,30 @@ defmodule NxSignal.ConvolutionTest do
       assert convolve(small, big, mode: "valid") == out_array[[1..2, 1..2, 1..2]]
       assert convolve(big, small, mode: "valid") == out_array[[1..2, 1..2, 1..2]]
     end
+
+    test "invalid params" do
+      a = Nx.tensor([3, 4, 5])
+      b = Nx.tensor([1, 2, 3])
+
+      assert_raise(CaseClauseError, fn ->
+        convolve(a, b, mode: "spam")
+      end)
+
+      assert_raise(FunctionClauseError, fn ->
+        convolve(a, b, mode: "eggs", method: "fft")
+      end)
+
+      assert_raise(CaseClauseError, fn ->
+        convolve(a, b, mode: "ham", method: "direct")
+      end)
+
+      assert_raise(CaseClauseError, fn ->
+        convolve(a, b, mode: "full", method: "bacon")
+      end)
+
+      assert_raise(CaseClauseError, fn ->
+        convolve(a, b, mode: "same", method: "bacon")
+      end)
+    end
   end
 end
