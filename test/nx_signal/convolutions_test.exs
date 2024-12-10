@@ -63,6 +63,21 @@ defmodule NxSignal.ConvolutionTest do
       assert c == Nx.tensor([Complex.new(-1, 7)])
     end
 
+    test "fft_nd" do
+      a = Nx.tensor([[1, 2, 3], [4, 5, 6]])
+      c = NxSignal.Transforms.fft_nd(a, axes: [0, 1], lengths: [2, 3])
+
+      z =
+        Nx.tensor([[21, Complex.new(-3, 1.732), Complex.new(-3, 1.732)], [-9, 0, 0]])
+
+      IO.inspect(Nx.subtract(c, z))
+
+      assert_all_close(
+        c,
+        z
+      )
+    end
+
     test "broadcastable" do
       a = 0..26 |> Enum.to_list() |> Nx.tensor() |> Nx.reshape({3, 3, 3})
 
