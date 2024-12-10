@@ -140,15 +140,16 @@ defmodule NxSignal.Convolution do
 
         sp1 = fft_nd(volume, axes: Nx.axes(volume) |> Enum.drop(2), lengths: shape)
         sp2 = fft_nd(kernel, axes: Nx.axes(kernel) |> Enum.drop(2), lengths: shape)
-        IO.inspect([Nx.shape(sp1), Nx.shape(sp2)])
+        # IO.inspect([Nx.shape(sp1), Nx.shape(sp2)])
+        IO.inspect(sp1)
+        IO.inspect(sp2)
 
         c =
           Nx.multiply(sp1, sp2)
 
-        ifft_nd(c, axes: Nx.axes(c) |> Enum.drop(2), lengths: shape)
-        |> IO.inspect()
+        # |> IO.inspect()
 
-      # |> IO.inspect()
+        ifft_nd(c, axes: Nx.axes(c) |> Enum.drop(2), lengths: shape)
 
       _ ->
         raise ArgumentError, message: "Rank of volume and kernel must be equial."
