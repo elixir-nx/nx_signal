@@ -332,5 +332,62 @@ defmodule NxSignal.ConvolutionTest do
       out = convolve(b, a, mode: "valid")
       assert out == expected
     end
+
+    test "same mode" do
+      a = Nx.tensor([1, 2, 3, 3, 1, 2])
+      b = Nx.tensor([1, 4, 3, 4, 5, 6, 7, 4, 3, 2, 1, 1, 3])
+
+      c = convolve(a, b, mode: "same")
+      d = Nx.tensor([57, 61, 63, 57, 45, 36]) |> Nx.as_type({:f, 32})
+      assert c == d
+    end
+
+    test "invalid shapes" do
+      a =
+        1..6
+        |> Enum.to_list()
+        |> Nx.tensor()
+        |> Nx.reshape({2, 3})
+
+      b =
+        -6..-1
+        |> Enum.to_list()
+        |> Nx.tensor()
+        |> Nx.reshape({3, 2})
+
+      assert_raise(ArgumentError, fn ->
+        convolve(a, b, mode: "valid")
+      end)
+
+      assert_raise(ArgumentError, fn ->
+        convolve(b, a, mode: "valid")
+      end)
+    end
+
+    test "don't complexify" do
+      a = Nx.tensor([1, 2, 3])
+      b = Nx.tensor([4, 5, 6])
+      types = [{:f, 32}, {:c, 64}]
+
+      for t1 <- types, t2 <- types do
+        aT = Nx.as_type(a, t1)
+        bT = Nx.as_type(b, t2)
+
+        outD = convolve(aT, bT, method: "direct")
+        outF = convolve(aT, bT, method: "fft")
+
+        assert_all_close(outD, outF)
+
+        case {t1, t2} do
+          {{ts1, _}, {ts2, _}} when ts1 == :c or ts2 == :c ->
+            assert {:c, 64} == Nx.type(outF)
+            assert {:c, 64} == Nx.type(outD)
+
+          el ->
+            assert {:f, 32} == Nx.type(outF)
+            assert {:f, 32} == Nx.type(outD)
+        end
+      end
+    end
   end
 end

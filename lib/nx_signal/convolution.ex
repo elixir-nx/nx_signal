@@ -147,9 +147,6 @@ defmodule NxSignal.Convolution do
 
   deftransform fftconvolve(in1, in2, opts \\ []) do
     case {Nx.rank(in1), Nx.rank(in2)} do
-      {1, 1} ->
-        Nx.product(in1, in2)
-
       {a, b} when a == b ->
         s1 = Nx.shape(in1) |> Tuple.to_list()
         s2 = Nx.shape(in2) |> Tuple.to_list()
@@ -181,7 +178,13 @@ defmodule NxSignal.Convolution do
 
         c = Nx.multiply(sp1, sp2)
 
-        ifft_nd(c, axes: axes)
+        out = ifft_nd(c, axes: axes)
+
+        if Nx.Type.merge(Nx.type(in1), Nx.type(in2)) |> Nx.Type.complex?() do
+          out
+        else
+          Nx.real(out)
+        end
 
       _ ->
         raise ArgumentError, message: "Rank of in1 and in2 must be equal."
