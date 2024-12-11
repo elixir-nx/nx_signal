@@ -22,10 +22,10 @@ defmodule NxSignal.Convolution do
     input_rank =
       case {Nx.rank(in1), Nx.rank(in2)} do
         {0, r} ->
-          r
+          raise ArgumentError, method: "Incompatible ranks: {0, #{r}}"
 
         {r, 0} ->
-          r
+          raise ArgumentError, method: "Incompatible ranks: {#{r}, 0}"
 
         {r, r} ->
           r

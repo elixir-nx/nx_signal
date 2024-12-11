@@ -389,5 +389,31 @@ defmodule NxSignal.ConvolutionTest do
         end
       end
     end
+
+    test "mismatched dims" do
+      assert_raise(ArgumentError, fn ->
+        convolve(Nx.tensor([1]), Nx.tensor(2), method: "direct")
+      end)
+
+      assert_raise(ArgumentError, fn ->
+        convolve(Nx.tensor(1), Nx.tensor([2]), method: "direct")
+      end)
+
+      assert_raise(ArgumentError, fn ->
+        convolve(Nx.tensor([1]), Nx.tensor(2), method: "fft")
+      end)
+
+      assert_raise(ArgumentError, fn ->
+        convolve(Nx.tensor(1), Nx.tensor([2]), method: "fft")
+      end)
+
+      assert_raise(ArgumentError, fn ->
+        convolve(Nx.tensor([1]), Nx.tensor([[2]]))
+      end)
+
+      assert_raise(ArgumentError, fn ->
+        convolve(Nx.tensor([3]), Nx.tensor(2))
+      end)
+    end
   end
 end
