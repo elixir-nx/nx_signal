@@ -415,5 +415,16 @@ defmodule NxSignal.ConvolutionTest do
         convolve(Nx.tensor([3]), Nx.tensor(2))
       end)
     end
+
+    test "2d valid mode" do
+      e = Nx.tensor([[2, 3, 4, 5, 6, 7, 8], [4, 5, 6, 7, 8, 9, 10]])
+      f = Nx.tensor([[1, 2, 3], [3, 4, 5]])
+      h = Nx.tensor([[62, 80, 98, 116, 134]]) |> Nx.as_type({:f, 32})
+      g = convolve(e, f, mode: "valid")
+      assert g == h
+
+      g = convolve(f, e, mode: "valid")
+      assert g == h
+    end
   end
 end
