@@ -308,5 +308,29 @@ defmodule NxSignal.ConvolutionTest do
         convolve(a, b, mode: "same", method: "bacon")
       end)
     end
+
+    test "valid mode 2.1" do
+      a = Nx.tensor([1, 2, 3, 6, 5, 3])
+      b = Nx.tensor([2, 3, 4, 5, 3, 4, 2, 2, 1])
+      expected = Nx.tensor([70, 78, 73, 65]) |> Nx.as_type({:f, 32})
+
+      out = convolve(a, b, mode: "valid")
+      assert out == expected
+
+      out = convolve(b, a, mode: "valid")
+      assert out == expected
+    end
+
+    test "valid mode 2.2" do
+      a = Nx.tensor([Complex.new(1, 5), Complex.new(2, -1), Complex.new(3, 0)])
+      b = Nx.tensor([Complex.new(2, -3), Complex.new(1, 0)])
+      expected = Nx.tensor([Complex.new(2, -3), Complex.new(8, -10)])
+
+      out = convolve(a, b, mode: "valid")
+      assert out == expected
+
+      out = convolve(b, a, mode: "valid")
+      assert out == expected
+    end
   end
 end
