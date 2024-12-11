@@ -426,5 +426,39 @@ defmodule NxSignal.ConvolutionTest do
       g = convolve(f, e, mode: "valid")
       assert g == h
     end
+
+    test "FFT real" do
+      a = Nx.tensor([1, 2, 3])
+      expected = Nx.tensor([1, 4, 10, 12, 9.0])
+      out = convolve(a, a, method: "fft")
+      assert_all_close(out, expected)
+    end
+
+    # test "FFT real axes" do
+    #   # This test relies on specifying axes to convolve which we don't support.
+    #   a = Nx.tensor([1, 2, 3])
+    #   expected = Nx.tensor([1, 4, 10, 12, 9.0])
+
+    #   a = Nx.tile(a, [2, 1])
+    #   expected = Nx.tile(expected, [2, 1])
+    #   out = convolve(a, a, method: "fft")
+    #   assert_all_close(out, expected)
+    # end
+
+    test "FFT complex" do
+      a = Nx.tensor([Complex.new(1, 1), Complex.new(2, 2), Complex.new(3, 3)])
+
+      expected =
+        Nx.tensor([
+          Complex.new(0, 2),
+          Complex.new(0, 8),
+          Complex.new(0, 20),
+          Complex.new(0, 24),
+          Complex.new(0, 18)
+        ])
+
+      out = convolve(a, a, method: "fft")
+      assert_all_close(out, expected)
+    end
   end
 end
