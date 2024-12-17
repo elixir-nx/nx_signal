@@ -27,7 +27,7 @@ defmodule NxSignal.Convolution do
   end
 
   deftransform correlate(in1, in2, opts \\ []) do
-    convolve(in1, Nx.reverse(in2), opts)
+    convolve(in1, Nx.conjugate(Nx.reverse(in2)), opts)
   end
 
   defp direct_convolve(in1, in2, opts) do

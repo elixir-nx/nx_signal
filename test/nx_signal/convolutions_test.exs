@@ -564,5 +564,43 @@ defmodule NxSignal.ConvolutionTest do
       y = correlate(a, b, mode: "full")
       assert_all_close(y, y_r)
     end
+
+    defp setup_rank1_complex(mode \\ "full") do
+      key = Nx.Random.key(9)
+
+      {a, key} = Nx.Random.normal(key, shape: {10}, type: :c64)
+      {a2, key} = Nx.Random.normal(key, shape: {10}, type: :c64)
+      a = Nx.add(a, Nx.multiply(Complex.new(0, 1), a2))
+
+      {b, key} = Nx.Random.normal(key, shape: {8}, type: :c64)
+      {b2, key} = Nx.Random.normal(key, shape: {8}, type: :c64)
+      b = Nx.add(b, Nx.multiply(Complex.new(0, 1), b2))
+
+      y_r =
+        Nx.add(
+          correlate(Nx.real(a), Nx.real(b), mode: mode),
+          correlate(Nx.imag(a), Nx.imag(b), mode: mode)
+        )
+
+      y_r =
+        Nx.add(
+          y_r,
+          Nx.multiply(
+            Complex.new(0, 1),
+            Nx.add(
+              Nx.multiply(-1, correlate(Nx.real(a), Nx.imag(b), mode: mode)),
+              correlate(Nx.imag(a), Nx.real(b), mode: mode)
+            )
+          )
+        )
+
+      {key, a, b, y_r}
+    end
+
+    test "complex rank 1 valid" do
+      {key, a, b, y_r} = setup_rank1_complex("valid")
+      y = correlate(a, b, mode: "valid")
+      assert_all_close(y, y_r)
+    end
   end
 end
