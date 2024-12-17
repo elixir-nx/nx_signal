@@ -2,7 +2,6 @@ defmodule NxSignal.ConvolutionTest do
   use NxSignal.Case
   # doctest NxSignal.Filters
   import NxSignal.Helpers
-  alias NxSignal.Convolution
   import NxSignal.Convolution, [:convolve, 3]
 
   describe "convolve/4" do
@@ -292,7 +291,7 @@ defmodule NxSignal.ConvolutionTest do
         convolve(a, b, mode: "spam")
       end)
 
-      assert_raise(FunctionClauseError, fn ->
+      assert_raise(CaseClauseError, fn ->
         convolve(a, b, mode: "eggs", method: "fft")
       end)
 
@@ -383,7 +382,7 @@ defmodule NxSignal.ConvolutionTest do
             assert {:c, 64} == Nx.type(outF)
             assert {:c, 64} == Nx.type(outD)
 
-          el ->
+          _el ->
             assert {:f, 32} == Nx.type(outF)
             assert {:f, 32} == Nx.type(outD)
         end
@@ -517,6 +516,21 @@ defmodule NxSignal.ConvolutionTest do
       out = convolve(b, a, method: "fft", mode: "same")
 
       assert_all_close(out, expected_2)
+    end
+
+    test "FFT valid mode real" do
+      a = Nx.tensor([3, 2, 1])
+      b = Nx.tensor([3, 3, 5, 6, 8, 7, 9, 0, 1])
+
+      expected = Nx.tensor([24.0, 31.0, 41.0, 43.0, 49.0, 25.0, 12.0])
+
+      out = convolve(a, b, method: "fft", mode: "valid")
+
+      assert_all_close(out, expected)
+
+      out = convolve(b, a, method: "fft", mode: "valid")
+
+      assert_all_close(out, expected)
     end
   end
 end

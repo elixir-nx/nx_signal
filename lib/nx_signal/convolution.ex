@@ -21,11 +21,14 @@ defmodule NxSignal.Convolution do
   defp direct_convolve(in1, in2, opts) do
     input_rank =
       case {Nx.rank(in1), Nx.rank(in2)} do
+        {0, 0} ->
+          0
+
         {0, r} ->
-          raise ArgumentError, method: "Incompatible ranks: {0, #{r}}"
+          raise ArgumentError, message: "Incompatible ranks: {0, #{r}}"
 
         {r, 0} ->
-          raise ArgumentError, method: "Incompatible ranks: {#{r}, 0}"
+          raise ArgumentError, message: "Incompatible ranks: {#{r}, 0}"
 
         {r, r} ->
           r
@@ -156,6 +159,7 @@ defmodule NxSignal.Convolution do
             case opts[:mode] do
               "full" -> ax1 + ax2 - 1
               "same" -> ax1 + ax2 - 1
+              "valid" -> ax1 + ax2 - 1
             end
           end)
 
@@ -194,11 +198,7 @@ defmodule NxSignal.Convolution do
     end
   end
 
-  deftransform apply_mode(out, _s1, _s2, "full") do
-    out
-  end
-
-  deftransform apply_mode(out, s1, _s2, "same") do
+  defp centered(out, s1) do
     newshape = Nx.tensor(s1)
     currshape = Nx.tensor(Nx.shape(out) |> Tuple.to_list())
     startind = Nx.floor(Nx.divide(Nx.subtract(currshape, newshape), 2)) |> Nx.as_type({:u, 32})
@@ -213,6 +213,39 @@ defmodule NxSignal.Convolution do
     out[myslice]
   end
 
+  deftransform apply_mode(out, _s1, _s2, "full") do
+    out
+  end
+
+  deftransform apply_mode(out, s1, _s2, "same") do
+    centered(out, s1)
+  end
+
   deftransform apply_mode(out, s1, s2, "valid") do
+    {s1, s2} = swap_axes(s1, s2)
+
+    shape_valid =
+      for {a, b} <- Enum.zip(s1, s2) do
+        a - b + 1
+      end
+
+    centered(out, shape_valid)
+  end
+
+  defp swap_axes(s1, s2) do
+    ok1 = Enum.all?(Enum.zip(s1, s2) |> Enum.map(fn {a, b} -> a >= b end))
+    ok2 = Enum.all?(Enum.zip(s2, s1) |> Enum.map(fn {a, b} -> a >= b end))
+
+    if !(ok1 || ok2) do
+      raise ArgumentError,
+        message:
+          "For 'valid' mode, one must be at least as large as the other in every dimension."
+    else
+      if ok1 do
+        {s1, s2}
+      else
+        {s2, s1}
+      end
+    end
   end
 end
