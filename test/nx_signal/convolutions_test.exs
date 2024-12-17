@@ -558,5 +558,11 @@ defmodule NxSignal.ConvolutionTest do
       y = correlate(a, b, mode: "same")
       assert_all_close(y, y_r[0..-2//1])
     end
+
+    test "rank 1 full" do
+      {a, b, y_r} = setup_rank1()
+      y = correlate(a, b, mode: "full")
+      assert_all_close(y, y_r)
+    end
   end
 end
