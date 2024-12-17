@@ -544,13 +544,19 @@ defmodule NxSignal.ConvolutionTest do
       {a, b, y}
     end
 
-    test "rank 1" do
+    test "rank 1 valid" do
       {a, b, y_r} = setup_rank1()
       y = correlate(a, b, mode: "valid")
       assert_all_close(y, y_r[1..3])
 
       y = correlate(b, a, mode: "valid")
       assert_all_close(y, Nx.reverse(y_r[1..3], axes: [0]))
+    end
+
+    test "rank 1 same" do
+      {a, b, y_r} = setup_rank1()
+      y = correlate(a, b, mode: "same")
+      assert_all_close(y, y_r[0..-2//1])
     end
   end
 end
