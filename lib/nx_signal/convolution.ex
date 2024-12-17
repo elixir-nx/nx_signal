@@ -6,6 +6,14 @@ defmodule NxSignal.Convolution do
   import Nx.Defn
   import NxSignal.Transforms
 
+  @doc ~S"""
+  Computes the convolution of two tensors.
+
+  ## Options
+
+    * `:method` - Either `"fft"` or `"direct"` (default)
+    * `:mode` - Either `"full"` (default), `"valid"`, or `"same"`.
+  """
   deftransform convolve(in1, in2, opts \\ []) do
     opts = Keyword.validate!(opts, mode: "full", method: "direct")
 
