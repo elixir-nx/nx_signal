@@ -503,5 +503,20 @@ defmodule NxSignal.ConvolutionTest do
       out = convolve(a, a, method: "fft")
       assert_all_close(out, expected)
     end
+
+    test "FFT real same mode" do
+      a = Nx.tensor([1, 2, 3])
+      b = Nx.tensor([3, 3, 5, 6, 8, 7, 9, 0, 1])
+      expected_1 = Nx.tensor([35.0, 41.0, 47.0])
+      expected_2 = Nx.tensor([9.0, 20.0, 25.0, 35.0, 41.0, 47.0, 39.0, 28.0, 2.0])
+
+      out = convolve(a, b, method: "fft", mode: "same")
+
+      assert_all_close(out, expected_1)
+
+      out = convolve(b, a, method: "fft", mode: "same")
+
+      assert_all_close(out, expected_2)
+    end
   end
 end

@@ -155,7 +155,7 @@ defmodule NxSignal.Convolution do
           Enum.zip_with(s1, s2, fn ax1, ax2 ->
             case opts[:mode] do
               "full" -> ax1 + ax2 - 1
-              "same" -> ax1
+              "same" -> ax1 + ax2 - 1
             end
           end)
 
@@ -180,14 +180,39 @@ defmodule NxSignal.Convolution do
 
         out = ifft_nd(c, axes: axes)
 
-        if Nx.Type.merge(Nx.type(in1), Nx.type(in2)) |> Nx.Type.complex?() do
-          out
-        else
-          Nx.real(out)
-        end
+        out =
+          if Nx.Type.merge(Nx.type(in1), Nx.type(in2)) |> Nx.Type.complex?() do
+            out
+          else
+            Nx.real(out)
+          end
+
+        apply_mode(out, s1, s2, opts[:mode])
 
       _ ->
         raise ArgumentError, message: "Rank of in1 and in2 must be equal."
     end
+  end
+
+  deftransform apply_mode(out, _s1, _s2, "full") do
+    out
+  end
+
+  deftransform apply_mode(out, s1, _s2, "same") do
+    newshape = Nx.tensor(s1)
+    currshape = Nx.tensor(Nx.shape(out) |> Tuple.to_list())
+    startind = Nx.floor(Nx.divide(Nx.subtract(currshape, newshape), 2)) |> Nx.as_type({:u, 32})
+    endind = Nx.add(startind, newshape) |> Nx.as_type({:u, 32})
+    iter = Nx.shape(endind) |> Tuple.to_list() |> length()
+
+    myslice =
+      for idx <- 0..(iter - 1) do
+        Nx.to_number(startind[idx])..(Nx.to_number(endind[idx]) - 1)
+      end
+
+    out[myslice]
+  end
+
+  deftransform apply_mode(out, s1, s2, "valid") do
   end
 end
