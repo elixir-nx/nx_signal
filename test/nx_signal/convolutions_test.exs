@@ -4,7 +4,7 @@ defmodule NxSignal.ConvolutionTest do
   import NxSignal.Helpers
   import NxSignal.Convolution, [:convolve, 3]
 
-  describe "convolve/4" do
+  describe "convolve/3" do
     # These tests were adapted from https://github.com/numpy/numpy/blob/v2.1.0/numpy/_core/tests/test_numeric.py#L3573
     test "numpy object" do
       d = Nx.tensor(List.duplicate(1.0, 100))
@@ -531,6 +531,26 @@ defmodule NxSignal.ConvolutionTest do
       out = convolve(b, a, method: "fft", mode: "valid")
 
       assert_all_close(out, expected)
+    end
+  end
+
+  describe "correlate/3" do
+    def setup_rank1() do
+      a = Nx.linspace(0, 3, n: 4)
+      b = Nx.linspace(1, 2, n: 2)
+
+      y = Nx.tensor([0, 2, 5, 8, 3])
+
+      {a, b, y}
+    end
+
+    test "rank 1" do
+      {a, b, y_r} = setup_rank1()
+      y = correlate(a, b, mode: "valid")
+      assert_all_close(y, y_r[1..3])
+
+      y = correlate(b, a, mode: "valid")
+      assert_all_close(y, Nx.reverse(y_r[1..3], axes: [0]))
     end
   end
 end

@@ -26,6 +26,10 @@ defmodule NxSignal.Convolution do
     end
   end
 
+  deftransform correlate(in1, in2, opts \\ []) do
+    convolve(in1, Nx.reverse(in2), opts)
+  end
+
   defp direct_convolve(in1, in2, opts) do
     input_rank =
       case {Nx.rank(in1), Nx.rank(in2)} do
