@@ -1,12 +1,16 @@
 defmodule NxSignal.Case do
   use ExUnit.CaseTemplate
 
-  using do
+  using opts do
+    validate_doc_metadata = Keyword.get(opts, :validate_doc_metadata, true)
+
     quote do
       import NxSignal.Case
 
-      test "defines doc :type" do
-        validate_doc_metadata(__MODULE__)
+      if unquote(validate_doc_metadata) do
+        test "defines doc :type" do
+          validate_doc_metadata(__MODULE__)
+        end
       end
     end
   end

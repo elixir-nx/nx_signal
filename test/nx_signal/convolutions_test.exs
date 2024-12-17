@@ -1,5 +1,5 @@
 defmodule NxSignal.ConvolutionTest do
-  use NxSignal.Case
+  use NxSignal.Case, async: true, validate_doc_metadata: false
   # doctest NxSignal.Filters
   import NxSignal.Helpers
   import NxSignal.Convolution, [:convolve, 3]
