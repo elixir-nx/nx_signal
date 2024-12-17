@@ -460,5 +460,48 @@ defmodule NxSignal.ConvolutionTest do
       out = convolve(a, a, method: "fft")
       assert_all_close(out, expected)
     end
+
+    test "FFT 2d real same" do
+      a = Nx.tensor([[1, 2, 3], [4, 5, 6]])
+      expected = Nx.tensor([[1, 4, 10, 12, 9], [8, 26, 56, 54, 36], [16, 40, 73, 60, 36]])
+      out = convolve(a, a, method: "fft")
+      assert_all_close(out, expected)
+    end
+
+    test "FFT 2d complex same" do
+      a =
+        Nx.tensor([
+          [Complex.new(1, 2), Complex.new(3, 4), Complex.new(5, 6)],
+          [Complex.new(2, 1), Complex.new(4, 3), Complex.new(6, 5)]
+        ])
+
+      expected =
+        Nx.tensor([
+          [
+            Complex.new(-3, 4),
+            Complex.new(-10, 20),
+            Complex.new(-21, 56),
+            Complex.new(-18, 76),
+            Complex.new(-11, 60)
+          ],
+          [
+            Complex.new(0, 10),
+            Complex.new(0, 44),
+            Complex.new(0, 118),
+            Complex.new(0, 156),
+            Complex.new(0, 122)
+          ],
+          [
+            Complex.new(3, 4),
+            Complex.new(10, 20),
+            Complex.new(21, 56),
+            Complex.new(18, 76),
+            Complex.new(11, 60)
+          ]
+        ])
+
+      out = convolve(a, a, method: "fft")
+      assert_all_close(out, expected)
+    end
   end
 end
