@@ -1,36 +1,48 @@
 defmodule NxSignal.Convolution do
   @moduledoc """
-  Convolution functions
+  Convolution functions through various methods.
+
+  Follows the `scipy.signal` conventions.
   """
 
   import Nx.Defn
   import NxSignal.Transforms
 
-  @doc ~S"""
+  @doc """
   Computes the convolution of two tensors.
 
   ## Options
 
-    * `:method` - Either `"fft"` or `"direct"` (default)
-    * `:mode` - Either `"full"` (default), `"valid"`, or `"same"`.
+    * `:method` - One of `:fft` or `:direct`. Defaults to `:direct`.
+    * `:mode` - One of `:full`, `:valid`, or `:same`. Defaults to `:full`.
   """
   deftransform convolve(in1, in2, opts \\ []) do
-    opts = Keyword.validate!(opts, mode: "full", method: "direct")
+    opts = Keyword.validate!(opts, mode: :full, method: :direct)
+
+    if opts[:mode] not in [:full, :same, :valid] do
+      raise ArgumentError,
+            "expected mode to be one of [:full, :same, :valid], got: #{inspect(opts[:mode])}"
+    end
+
+    if opts[:method] not in [:direct, :fft] do
+      raise ArgumentError,
+            "expected method to be one of [:direct, :fft], got: #{inspect(opts[:method])}"
+    end
 
     case opts[:method] do
-      "direct" ->
+      :direct ->
         direct_convolve(in1, in2, opts)
 
-      "fft" ->
+      :fft ->
         fftconvolve(in1, in2, opts)
     end
   end
 
-  deftransform correlate(in1, in2, opts \\ []) do
+  defn correlate(in1, in2, opts \\ []) do
     convolve(in1, Nx.conjugate(Nx.reverse(in2)), opts)
   end
 
-  defp direct_convolve(in1, in2, opts) do
+  deftransformp direct_convolve(in1, in2, opts) do
     input_rank =
       case {Nx.rank(in1), Nx.rank(in2)} do
         {0, 0} ->
@@ -56,20 +68,20 @@ defmodule NxSignal.Convolution do
     ok2 = Enum.all?(for {i, j} <- zipped, do: i <= j)
 
     {in1, in2} =
-      if opts[:mode] == "valid" do
-        if not (ok1 or ok2) do
+      cond do
+        opts[:mode] != :valid ->
+          {in1, in2}
+
+        ok1 ->
+          {in1, in2}
+
+        ok2 ->
+          {in2, in1}
+
+        true ->
           raise ArgumentError,
             message:
-              "For 'valid' mode, one must be at least as large as the other in every dimension"
-        end
-
-        if not ok1 do
-          {in2, in1}
-        else
-          {in1, in2}
-        end
-      else
-        {in1, in2}
+              "For :valid mode, one must be at least as large as the other in every dimension"
       end
 
     kernel = Nx.reverse(in2)
@@ -94,7 +106,7 @@ defmodule NxSignal.Convolution do
 
     opts =
       case opts[:mode] do
-        "same" ->
+        :same ->
           kernel_spatial_shape =
             Nx.shape(kernel)
             |> Tuple.to_list()
@@ -112,7 +124,7 @@ defmodule NxSignal.Convolution do
 
           [padding: padding]
 
-        "full" ->
+        :full ->
           kernel_spatial_shape =
             Nx.shape(kernel)
             |> Tuple.to_list()
@@ -125,7 +137,7 @@ defmodule NxSignal.Convolution do
 
           [padding: padding]
 
-        "valid" ->
+        :valid ->
           [padding: :valid]
       end
 
@@ -148,7 +160,7 @@ defmodule NxSignal.Convolution do
     |> clip_valid(Nx.shape(volume), Nx.shape(kernel), opts[:mode])
   end
 
-  defp clip_valid(out, in1_shape, in2_shape, "valid") do
+  deftransformp clip_valid(out, in1_shape, in2_shape, :valid) do
     select =
       [in1_shape, in2_shape]
       |> Enum.zip_with(fn [i, j] ->
@@ -158,7 +170,7 @@ defmodule NxSignal.Convolution do
     out[select]
   end
 
-  defp clip_valid(out, _, _, _), do: out
+  deftransformp clip_valid(out, _, _, _), do: out
 
   deftransform fftconvolve(in1, in2, opts \\ []) do
     case {Nx.rank(in1), Nx.rank(in2)} do
@@ -168,11 +180,7 @@ defmodule NxSignal.Convolution do
 
         lengths =
           Enum.zip_with(s1, s2, fn ax1, ax2 ->
-            case opts[:mode] do
-              "full" -> ax1 + ax2 - 1
-              "same" -> ax1 + ax2 - 1
-              "valid" -> ax1 + ax2 - 1
-            end
+            ax1 + ax2 - 1
           end)
 
         axes =
@@ -210,30 +218,15 @@ defmodule NxSignal.Convolution do
     end
   end
 
-  defp centered(out, s1) do
-    newshape = Nx.tensor(s1)
-    currshape = Nx.tensor(Nx.shape(out) |> Tuple.to_list())
-    startind = Nx.floor(Nx.divide(Nx.subtract(currshape, newshape), 2)) |> Nx.as_type({:u, 32})
-    endind = Nx.add(startind, newshape) |> Nx.as_type({:u, 32})
-    iter = Nx.shape(endind) |> Tuple.to_list() |> length()
-
-    myslice =
-      for idx <- 0..(iter - 1) do
-        Nx.to_number(startind[idx])..(Nx.to_number(endind[idx]) - 1)
-      end
-
-    out[myslice]
-  end
-
-  deftransform apply_mode(out, _s1, _s2, "full") do
+  deftransform apply_mode(out, _s1, _s2, :full) do
     out
   end
 
-  deftransform apply_mode(out, s1, _s2, "same") do
+  deftransform apply_mode(out, s1, _s2, :same) do
     centered(out, s1)
   end
 
-  deftransform apply_mode(out, s1, s2, "valid") do
+  deftransform apply_mode(out, s1, s2, :valid) do
     {s1, s2} = swap_axes(s1, s2)
 
     shape_valid =
@@ -244,20 +237,33 @@ defmodule NxSignal.Convolution do
     centered(out, shape_valid)
   end
 
-  defp swap_axes(s1, s2) do
-    ok1 = Enum.all?(Enum.zip(s1, s2) |> Enum.map(fn {a, b} -> a >= b end))
-    ok2 = Enum.all?(Enum.zip(s2, s1) |> Enum.map(fn {a, b} -> a >= b end))
+  deftransformp centered(out, new_shape) do
+    start_indices =
+      out
+      |> Nx.shape()
+      |> Tuple.to_list()
+      |> Enum.zip_with(new_shape, fn current, new ->
+        div(current - new, 2)
+      end)
 
-    if !(ok1 || ok2) do
-      raise ArgumentError,
-        message:
-          "For 'valid' mode, one must be at least as large as the other in every dimension."
-    else
-      if ok1 do
+    Nx.slice(out, start_indices, new_shape)
+  end
+
+  defp swap_axes(s1, s2) do
+    ok1 = Enum.zip_reduce(s1, s2, true, fn a, b, acc -> acc and a >= b end)
+    ok2 = Enum.zip_reduce(s2, s1, true, fn a, b, acc -> acc and a >= b end)
+
+    cond do
+      ok1 ->
         {s1, s2}
-      else
+
+      ok2 ->
         {s2, s1}
-      end
+
+      true ->
+        raise ArgumentError,
+          message:
+            "For 'valid' mode, one must be at least as large as the other in every dimension."
     end
   end
 end
