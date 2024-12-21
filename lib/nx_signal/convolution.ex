@@ -34,6 +34,14 @@ defmodule NxSignal.Convolution do
 
     * `:method` - One of `:fft` or `:direct`. Defaults to `:direct`.
     * `:mode` - One of `:full`, `:valid`, or `:same`. Defaults to `:full`.
+
+  ## Examples
+
+    iex> NxSignal.Convolution.convolve(Nx.tensor([1,2,3]), Nx.tensor([3,4,5]))
+    #Nx.Tensor<
+      f32[5]
+      [3.0, 10.0, 22.0, 22.0, 15.0]
+    >
   """
   deftransform convolve(in1, in2, opts \\ []) do
     opts = Keyword.validate!(opts, mode: :full, method: :direct)
@@ -81,6 +89,14 @@ defmodule NxSignal.Convolution do
 
     * `:method` - One of `:fft` or `:direct`. Defaults to `:direct`.
     * `:mode` - One of `:full`, `:valid`, or `:same`. Defaults to `:full`.
+
+  ## Examples
+
+    iex> NxSignal.Convolution.correlate(Nx.tensor([1,2,3]), Nx.tensor([3,4,5]))
+    #Nx.Tensor<
+      c64[5]
+      [5.0-0.0i, 14.0-0.0i, 26.0-0.0i, 18.0-0.0i, 9.0-0.0i]
+    >
   """
   defn correlate(in1, in2, opts \\ []) do
     convolve(in1, Nx.conjugate(Nx.reverse(in2)), opts)
