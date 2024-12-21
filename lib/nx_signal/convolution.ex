@@ -19,12 +19,11 @@ defmodule NxSignal.Convolution do
 
   where
 
-
   $$
   \\tilde{f}[n] =
   \\begin{cases}
-    0 & n < 0 \\\\
-    0 & n \\geq N \\\\
+    0 & n < 0 \\\\\\\\
+    0 & n \\geq N \\\\\\\\
     f[n] & \\text{otherwise}
   \\end{cases}
   $$
