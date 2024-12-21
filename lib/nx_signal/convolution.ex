@@ -57,6 +57,31 @@ defmodule NxSignal.Convolution do
     end
   end
 
+  @doc """
+  Given $f[n] \\in \\mathbb{C}^N$ and $k[n] \\in \\mathbb{C}^{K}$, we define the correlation $f \\star k$ by
+
+   $$
+     g(m) = (f * k)[m] = \\sum_{m=0}^{K-1} \\overline{\\tilde{f}[m-n]}\\tilde{k}[m],
+   $$
+
+   where
+
+   $$
+   \\tilde{f}[n] =
+   \\begin{cases}
+     0 & n < 0 \\\\\\\\
+     0 & n \\geq N \\\\\\\\
+     f[n] & \\text{otherwise}
+   \\end{cases}
+   $$
+
+   and $\\tilde{k}$ is defined similarly.
+
+  ## Options
+
+    * `:method` - One of `:fft` or `:direct`. Defaults to `:direct`.
+    * `:mode` - One of `:full`, `:valid`, or `:same`. Defaults to `:full`.
+  """
   defn correlate(in1, in2, opts \\ []) do
     convolve(in1, Nx.conjugate(Nx.reverse(in2)), opts)
   end
