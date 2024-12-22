@@ -17,18 +17,9 @@ defmodule NxSignal.Convolution do
     g[n] = (f * k)[n] = \\sum_{m=0}^{K-1} f[n-m]k[m],
   $$
 
-  where
-
-  $$
-  \\tilde{f}[n] =
-  \\begin{cases}
-    0 & n < 0 \\\\\\\\
-    0 & n \\geq N \\\\\\\\
-    f[n] & \\text{otherwise}
-  \\end{cases}
-  $$
-
-  and $\\tilde{k}$ is defined similarly.
+  where $f[n]$ and $k[n]$ are assumed to be zero outside of their definition boundaries.
+  
+  $g[n]$ has length $N + K - 1$ when `mode: :full`
 
   ## Options
 
