@@ -14,7 +14,7 @@ defmodule NxSignal.Convolution do
   Given $f[n] \\in \\mathbb{C}^N$ and $k[n] \\in \\mathbb{C}^{K}$, we define the convolution $f * k$ by
 
   $$
-    g(m) = (f * k)[m] = \\sum_{m=0}^{K-1} \\tilde{f}[n-m]\\tilde{k}[m],
+    g[n] = (f * k)[n] = \\sum_{m=0}^{K-1} f[n-m]k[m],
   $$
 
   where
