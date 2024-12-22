@@ -11,7 +11,7 @@ defmodule NxSignal.Convolution do
   @doc """
   Computes the convolution of two tensors.
 
-  Given $f[n] \\in \\mathbb{C}^N$ and $k[n] \\in \\mathbb{C}^{K}$, we define the convolution $f * k$ by
+  Given $f[n]$ of length $N$ and $k[n]$ of length ${K}$, we define the convolution $(f * k)[n]$ by
 
   $$
     g[n] = (f * k)[n] = \\sum_{m=0}^{K-1} f[n-m]k[m],
