@@ -60,18 +60,7 @@ defmodule NxSignal.Convolution do
   Given $f[n] \\in \\mathbb{C}^N$ and $k[n] \\in \\mathbb{C}^{K}$, we define the correlation $f \\star k$ by
 
    $$
-     g(m) = (f * k)[m] = \\sum_{m=0}^{K-1} \\overline{\\tilde{f}[m-n]}\\tilde{k}[m],
-   $$
-
-   where
-
-   $$
-   \\tilde{f}[n] =
-   \\begin{cases}
-     0 & n < 0 \\\\\\\\
-     0 & n \\geq N \\\\\\\\
-     f[n] & \\text{otherwise}
-   \\end{cases}
+     g[n] = (f * k)[n] = \\sum_{m = 0}^{K - 1}f[n - m]\\overline{k[K - 1 - m]}
    $$
 
    and $\\tilde{k}$ is defined similarly.
