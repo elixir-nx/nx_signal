@@ -216,7 +216,33 @@ defmodule NxSignal.Convolution do
 
   deftransformp clip_valid(out, _, _, _), do: out
 
+  @doc """
+  Computes the convolution of two tensors via FFT.
+
+  Given signals $f[n]$ and $k[n]$, we define the convolution $(f * k)[n]$ by
+
+  $$
+    g[n] = IFFT(FFT(f) \\cdot FFT(k))
+  $$
+
+  where $f[n]$ and $k[n]$ have their DFTs calculated with zero-padding
+  in accordance with the `mode` option.
+
+  ## Options
+
+    * `:mode` - One of `:full`, `:valid`, or `:same`. Defaults to `:full`.
+
+  ## Examples
+
+    iex> NxSignal.Convolution.fftconvolve(Nx.tensor([1,2,3]), Nx.tensor([3,4,5]))
+    #Nx.Tensor<
+      f32[5]
+      [3.0000007152557373, 10.0, 22.0, 22.0, 15.0]
+    >
+  """
   deftransform fftconvolve(in1, in2, opts \\ []) do
+    opts = Keyword.validate!(opts, mode: :full, method: :direct)
+
     case {Nx.rank(in1), Nx.rank(in2)} do
       {a, b} when a == b ->
         s1 = Nx.shape(in1) |> Tuple.to_list()
