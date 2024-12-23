@@ -11,10 +11,28 @@ defmodule NxSignal.Convolution do
   @doc """
   Computes the convolution of two tensors.
 
+  Given $f[n]$ of length $N$ and $k[n]$ of length ${K}$, we define the convolution $(f * k)[n]$ by
+
+  $$
+    g[n] = (f * k)[n] = \\sum_{m=0}^{K-1} f[n-m]k[m],
+  $$
+
+  where $f[n]$ and $k[n]$ are assumed to be zero outside of their definition boundaries.
+
+  $g[n]$ has length $N + K - 1$ when `mode: :full`
+
   ## Options
 
     * `:method` - One of `:fft` or `:direct`. Defaults to `:direct`.
     * `:mode` - One of `:full`, `:valid`, or `:same`. Defaults to `:full`.
+
+  ## Examples
+
+    iex> NxSignal.Convolution.convolve(Nx.tensor([1,2,3]), Nx.tensor([3,4,5]))
+    #Nx.Tensor<
+      f32[5]
+      [3.0, 10.0, 22.0, 22.0, 15.0]
+    >
   """
 
   deftransform convolve(in1, in2, opts \\ []) do
@@ -39,8 +57,34 @@ defmodule NxSignal.Convolution do
     end
   end
 
+  @doc """
+  Given $f[n] \\in \\mathbb{C}^N$ and $k[n] \\in \\mathbb{C}^{K}$, we define the correlation $f \\star k$ by
+
+   $$
+     g[n] = (f * k)[n] = \\sum_{m = 0}^{K - 1}f[n - m]\\overline{k[K - 1 - m]}
+   $$
+
+   and $\\tilde{k}$ is defined similarly.
+
+  ## Options
+
+    * `:method` - One of `:fft` or `:direct`. Defaults to `:direct`.
+    * `:mode` - One of `:full`, `:valid`, or `:same`. Defaults to `:full`.
+
+  ## Examples
+
+    iex> NxSignal.Convolution.correlate(Nx.tensor([1,2,3]), Nx.tensor([3,4,5]))
+    #Nx.Tensor<
+      f32[5]
+      [5.0, 14.0, 26.0, 18.0, 9.0]
+    >
+  """
   defn correlate(in1, in2, opts \\ []) do
-    convolve(in1, Nx.conjugate(Nx.reverse(in2)), opts)
+    if Nx.type(in2) |> Nx.Type.complex?() do
+      convolve(in1, Nx.conjugate(Nx.reverse(in2)), opts)
+    else
+      convolve(in1, Nx.reverse(in2), opts)
+    end
   end
 
   deftransformp direct_convolve(in1, in2, opts) do
@@ -197,7 +241,37 @@ defmodule NxSignal.Convolution do
     end
   end
 
+
+  @doc """
+  Computes the convolution of two tensors via FFT.
+
+  Given signals $f[n]$, with length $N$, and $k[n]$, with length $K$, we define the convolution $g[n] = (f * k)[n]$ by
+
+  $$
+    g[n] = \\text{FFT}^{-1}(\\text{FFT}(f[n]) \\cdot \\text{FFT}(k[n]))
+  $$
+
+  where $f[n]$ and $k[n]$ have their DFTs calculated with $N + K - 1$ samples.
+  The output is sliced in accordance to the `mode` option, as described below.
+
+  ## Options
+
+    * `:mode` - One of `:full`, `:valid`, or `:same`. Defaults to `:full`.
+      * `:full` returns all $N + K - 1$ samples.
+      * `:same` returns the center $N$ samples.
+      * `:valid` returns the center $N - K + 1$ samples.
+
+  ## Examples
+
+    iex> NxSignal.Convolution.fftconvolve(Nx.tensor([1,2,3]), Nx.tensor([3,4,5]))
+    #Nx.Tensor<
+      f32[5]
+      [3.0000007152557373, 10.0, 22.0, 22.0, 15.0]
+    >
+  """
   deftransform fftconvolve(in1, in2, opts \\ []) do
+    opts = Keyword.validate!(opts, mode: :full, method: :direct)
+
     case {Nx.rank(in1), Nx.rank(in2)} do
       {a, b} when a == b ->
         s1 = Nx.shape(in1) |> Tuple.to_list()
@@ -243,15 +317,15 @@ defmodule NxSignal.Convolution do
     end
   end
 
-  deftransform apply_mode(out, _s1, _s2, :full) do
+  deftransformp apply_mode(out, _s1, _s2, :full) do
     out
   end
 
-  deftransform apply_mode(out, s1, _s2, :same) do
+  deftransformp apply_mode(out, s1, _s2, :same) do
     centered(out, s1)
   end
 
-  deftransform apply_mode(out, s1, s2, :valid) do
+  deftransformp apply_mode(out, s1, s2, :valid) do
     {s1, s2} = swap_axes(s1, s2)
 
     shape_valid =

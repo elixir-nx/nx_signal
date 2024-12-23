@@ -291,7 +291,7 @@ defmodule NxSignal.Waveforms do
   deftransformp chirp_validate_method(method) do
     valid_methods = [:linear, :quadratic, :logarithmic, :hyperbolic]
 
-    unless method in valid_methods do
+    if method not in valid_methods do
       raise ArgumentError,
             "invalid method, must be one of #{inspect(valid_methods)}, got: #{inspect(method)}"
     end

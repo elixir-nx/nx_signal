@@ -1,6 +1,6 @@
 defmodule NxSignal.ConvolutionTest do
   use NxSignal.Case, async: true, validate_doc_metadata: false
-  # doctest NxSignal.Filters
+  doctest NxSignal.Convolution
   import NxSignal.Helpers
   import NxSignal.Convolution, [:convolve, 3]
 
@@ -287,25 +287,45 @@ defmodule NxSignal.ConvolutionTest do
       a = Nx.tensor([3, 4, 5])
       b = Nx.tensor([1, 2, 3])
 
-      assert_raise(ArgumentError, "expected mode to be one of [:full, :same, :valid], got: :spam", fn ->
-        convolve(a, b, mode: :spam)
-      end)
+      assert_raise(
+        ArgumentError,
+        "expected mode to be one of [:full, :same, :valid], got: :spam",
+        fn ->
+          convolve(a, b, mode: :spam)
+        end
+      )
 
-      assert_raise(ArgumentError, "expected mode to be one of [:full, :same, :valid], got: :eggs", fn ->
-        convolve(a, b, mode: :eggs, method: :fft)
-      end)
+      assert_raise(
+        ArgumentError,
+        "expected mode to be one of [:full, :same, :valid], got: :eggs",
+        fn ->
+          convolve(a, b, mode: :eggs, method: :fft)
+        end
+      )
 
-      assert_raise(ArgumentError, "expected mode to be one of [:full, :same, :valid], got: :ham", fn ->
-        convolve(a, b, mode: :ham, method: :direct)
-      end)
+      assert_raise(
+        ArgumentError,
+        "expected mode to be one of [:full, :same, :valid], got: :ham",
+        fn ->
+          convolve(a, b, mode: :ham, method: :direct)
+        end
+      )
 
-      assert_raise(ArgumentError, "expected method to be one of [:direct, :fft], got: :bacon", fn ->
-        convolve(a, b, mode: :full, method: :bacon)
-      end)
+      assert_raise(
+        ArgumentError,
+        "expected method to be one of [:direct, :fft], got: :bacon",
+        fn ->
+          convolve(a, b, mode: :full, method: :bacon)
+        end
+      )
 
-      assert_raise(ArgumentError, "expected method to be one of [:direct, :fft], got: :bacon", fn ->
-        convolve(a, b, mode: :same, method: :bacon)
-      end)
+      assert_raise(
+        ArgumentError,
+        "expected method to be one of [:direct, :fft], got: :bacon",
+        fn ->
+          convolve(a, b, mode: :same, method: :bacon)
+        end
+      )
     end
 
     test "valid mode 2.1" do
