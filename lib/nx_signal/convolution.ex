@@ -11,7 +11,7 @@ defmodule NxSignal.Convolution do
   @doc """
   Computes the convolution of two tensors.
 
-  Given $f[n]$ of length $N$ and $k[n]$ of length ${K}$, we define the convolution $(f * k)[n]$ by
+  Given $f[n]$ of length $N$ and $k[n]$ of length ${K}$, we define the convolution $g[n] = (f * k)[n]$ by
 
   $$
     g[n] = (f * k)[n] = \\sum_{m=0}^{K-1} f[n-m]k[m],
@@ -19,12 +19,13 @@ defmodule NxSignal.Convolution do
 
   where $f[n]$ and $k[n]$ are assumed to be zero outside of their definition boundaries.
 
-  $g[n]$ has length $N + K - 1$ when `mode: :full`
-
   ## Options
 
     * `:method` - One of `:fft` or `:direct`. Defaults to `:direct`.
     * `:mode` - One of `:full`, `:valid`, or `:same`. Defaults to `:full`.
+      * `:full` returns all $N + K - 1$ samples.
+      * `:same` returns the center $N$ samples.
+      * `:valid` returns the center $N - K + 1$ samples.
 
   ## Examples
 
@@ -57,7 +58,7 @@ defmodule NxSignal.Convolution do
   end
 
   @doc """
-  Given $f[n] \\in \\mathbb{C}^N$ and $k[n] \\in \\mathbb{C}^{K}$, we define the correlation $f \\star k$ by
+  Given $f[n]$ of length $N$ and $k[n]$ of length ${K}$, we define the correlation $g[n] = (f \\star k)[n]$ by
 
    $$
      g[n] = (f * k)[n] = \\sum_{m = 0}^{K - 1}f[n - m]\\overline{k[K - 1 - m]}
@@ -69,6 +70,9 @@ defmodule NxSignal.Convolution do
 
     * `:method` - One of `:fft` or `:direct`. Defaults to `:direct`.
     * `:mode` - One of `:full`, `:valid`, or `:same`. Defaults to `:full`.
+      * `:full` returns all $N + K - 1$ samples.
+      * `:same` returns the center $N$ samples.
+      * `:valid` returns the center $N - K + 1$ samples.
 
   ## Examples
 
@@ -201,10 +205,10 @@ defmodule NxSignal.Convolution do
 
     out
     |> Nx.squeeze(axes: squeeze_axes)
-    |> clip_valid(Nx.shape(volume), Nx.shape(kernel), opts[:mode])
+    |> slice_valid(Nx.shape(volume), Nx.shape(kernel), opts[:mode])
   end
 
-  deftransformp clip_valid(out, in1_shape, in2_shape, :valid) do
+  deftransformp slice_valid(out, in1_shape, in2_shape, :valid) do
     select =
       [in1_shape, in2_shape]
       |> Enum.zip_with(fn [i, j] ->
@@ -214,7 +218,7 @@ defmodule NxSignal.Convolution do
     out[select]
   end
 
-  deftransformp clip_valid(out, _, _, _), do: out
+  deftransformp slice_valid(out, _, _, _), do: out
 
   @doc """
   Computes the convolution of two tensors via FFT.
