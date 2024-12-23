@@ -1,4 +1,5 @@
 defmodule NxSignal.Transforms do
+  @moduledoc false
   import Nx.Defn
 
   deftransform fft_nd(tensor, opts \\ []) do
