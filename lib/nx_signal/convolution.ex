@@ -219,18 +219,21 @@ defmodule NxSignal.Convolution do
   @doc """
   Computes the convolution of two tensors via FFT.
 
-  Given signals $f[n]$ and $k[n]$, we define the convolution $(f * k)[n]$ by
+  Given signals $f[n]$, with length $N$, and $k[n]$, with length $K$, we define the convolution $g[n] = (f * k)[n]$ by
 
   $$
-    g[n] = IFFT(FFT(f) \\cdot FFT(k))
+    g[n] = \\text{FFT}^{-1}(\\text{FFT}(f[n]) \\cdot \\text{FFT}(k[n]))
   $$
 
-  where $f[n]$ and $k[n]$ have their DFTs calculated with zero-padding
-  in accordance with the `mode` option.
+  where $f[n]$ and $k[n]$ have their DFTs calculated with $N + K - 1$ samples.
+  The output is sliced in accordance to the `mode` option, as described below.
 
   ## Options
 
     * `:mode` - One of `:full`, `:valid`, or `:same`. Defaults to `:full`.
+      * `:full` returns all $N + K - 1$ samples.
+      * `:same` returns the center $N$ samples.
+      * `:valid` returns the center $N - K + 1$ samples.
 
   ## Examples
 
@@ -288,15 +291,15 @@ defmodule NxSignal.Convolution do
     end
   end
 
-  deftransform apply_mode(out, _s1, _s2, :full) do
+  deftransformp apply_mode(out, _s1, _s2, :full) do
     out
   end
 
-  deftransform apply_mode(out, s1, _s2, :same) do
+  deftransformp apply_mode(out, s1, _s2, :same) do
     centered(out, s1)
   end
 
-  deftransform apply_mode(out, s1, s2, :valid) do
+  deftransformp apply_mode(out, s1, s2, :valid) do
     {s1, s2} = swap_axes(s1, s2)
 
     shape_valid =
