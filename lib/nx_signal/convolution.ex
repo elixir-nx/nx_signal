@@ -57,14 +57,16 @@ defmodule NxSignal.Convolution do
     end
   end
 
-  @doc """
-  Given $f[n]$ of length $N$ and $k[n]$ of length ${K}$, we define the correlation $g[n] = (f \\star k)[n]$ by
+  @doc ~S"""
+  Computes the correlation of two tensors.
 
-   $$
-     g[n] = (f * k)[n] = \\sum_{m = 0}^{K - 1}f[n - m]\\overline{k[K - 1 - m]}
-   $$
+  Given $f[n]$ of length $N$ and $k[n]$ of length ${K}$, we define the correlation $g[n] = (f \star k)[n]$ by
 
-   and $\\tilde{k}$ is defined similarly.
+  $$
+    g[n] = (f \star k)[n] = \\sum_{m = 0}^{K - 1}f[n - m]k^\*[K - 1 - m]
+  $$
+
+  where $k^\*[n]$ is the complex conjugate of $k[n]$.
 
   ## Options
 
