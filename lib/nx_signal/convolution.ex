@@ -18,7 +18,7 @@ defmodule NxSignal.Convolution do
   $$
 
   where $f[n]$ and $k[n]$ are assumed to be zero outside of their definition boundaries.
-  
+
   $g[n]$ has length $N + K - 1$ when `mode: :full`
 
   ## Options
@@ -74,12 +74,16 @@ defmodule NxSignal.Convolution do
 
     iex> NxSignal.Convolution.correlate(Nx.tensor([1,2,3]), Nx.tensor([3,4,5]))
     #Nx.Tensor<
-      c64[5]
-      [5.0-0.0i, 14.0-0.0i, 26.0-0.0i, 18.0-0.0i, 9.0-0.0i]
+      f32[5]
+      [5.0, 14.0, 26.0, 18.0, 9.0]
     >
   """
   defn correlate(in1, in2, opts \\ []) do
-    convolve(in1, Nx.conjugate(Nx.reverse(in2)), opts)
+    if Nx.type(in2) |> Nx.Type.complex?() do
+      convolve(in1, Nx.conjugate(Nx.reverse(in2)), opts)
+    else
+      convolve(in1, Nx.reverse(in2), opts)
+    end
   end
 
   deftransformp direct_convolve(in1, in2, opts) do
