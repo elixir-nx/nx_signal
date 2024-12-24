@@ -26,7 +26,7 @@ jobs:
         id: mix-cache # id to use in retrieve action
         with:
           path: deps
-          key: v1-${{ matrix.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
+          key: v1-${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
       - name: Install dependencies
         if: ${{ steps.mix-cache.outputs.cache-hit != 'true' }}
         run: mix deps.get
@@ -61,7 +61,7 @@ jobs:
         id: mix-cache # id to use in retrieve action
         with:
           path: deps
-          key: v1-${{ matrix.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
+          key: v1-${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
       - name: Install dependencies
         if: ${{ steps.mix-cache.outputs.cache-hit != 'true' }}
         run: mix deps.get
