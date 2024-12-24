@@ -1,8 +1,6 @@
 defmodule NxSignal.ConvolutionTest do
   use NxSignal.Case, async: true, validate_doc_metadata: false
   doctest NxSignal.Convolution
-  import NxSignal.Helpers
-  import NxSignal.Convolution, [:convolve, 3]
 
   describe "convolve/3" do
     # These tests were adapted from https://github.com/numpy/numpy/blob/v2.1.0/numpy/_core/tests/test_numeric.py#L3573
@@ -147,14 +145,14 @@ defmodule NxSignal.ConvolutionTest do
     test "single element" do
       a = Nx.tensor([4967])
       b = Nx.tensor([3920])
-      c = convolve(a, b)
+      c = NxSignal.Convolution.convolve(a, b)
       assert c == Nx.as_type(Nx.multiply(a, b), {:f, 32})
     end
 
     test "2d arrays" do
       a = Nx.tensor([[1, 2, 3], [3, 4, 5]])
       b = Nx.tensor([[2, 3, 4], [4, 5, 6]])
-      c = convolve(a, b)
+      c = NxSignal.Convolution.convolve(a, b)
 
       d =
         Nx.tensor([[2, 7, 16, 17, 12], [10, 30, 62, 58, 38], [12, 31, 58, 49, 30]])
@@ -275,12 +273,20 @@ defmodule NxSignal.ConvolutionTest do
         ]
         |> Nx.tensor()
 
-      assert convolve(small, big, mode: :full) == out_array
-      assert convolve(big, small, mode: :full) == out_array
-      assert convolve(small, big, mode: :same) == out_array[[1..2, 1..2, 1..2]]
-      assert convolve(big, small, mode: :same) == out_array[[0..2, 0..2, 0..2]]
-      assert convolve(small, big, mode: :valid) == out_array[[1..2, 1..2, 1..2]]
-      assert convolve(big, small, mode: :valid) == out_array[[1..2, 1..2, 1..2]]
+      assert NxSignal.Convolution.convolve(small, big, mode: :full) == out_array
+      assert NxSignal.Convolution.convolve(big, small, mode: :full) == out_array
+
+      assert NxSignal.Convolution.convolve(small, big, mode: :same) ==
+               out_array[[1..2, 1..2, 1..2]]
+
+      assert NxSignal.Convolution.convolve(big, small, mode: :same) ==
+               out_array[[0..2, 0..2, 0..2]]
+
+      assert NxSignal.Convolution.convolve(small, big, mode: :valid) ==
+               out_array[[1..2, 1..2, 1..2]]
+
+      assert NxSignal.Convolution.convolve(big, small, mode: :valid) ==
+               out_array[[1..2, 1..2, 1..2]]
     end
 
     test "invalid params" do
@@ -291,7 +297,7 @@ defmodule NxSignal.ConvolutionTest do
         ArgumentError,
         "expected mode to be one of [:full, :same, :valid], got: :spam",
         fn ->
-          convolve(a, b, mode: :spam)
+          NxSignal.Convolution.convolve(a, b, mode: :spam)
         end
       )
 
@@ -299,7 +305,7 @@ defmodule NxSignal.ConvolutionTest do
         ArgumentError,
         "expected mode to be one of [:full, :same, :valid], got: :eggs",
         fn ->
-          convolve(a, b, mode: :eggs, method: :fft)
+          NxSignal.Convolution.convolve(a, b, mode: :eggs, method: :fft)
         end
       )
 
@@ -307,7 +313,7 @@ defmodule NxSignal.ConvolutionTest do
         ArgumentError,
         "expected mode to be one of [:full, :same, :valid], got: :ham",
         fn ->
-          convolve(a, b, mode: :ham, method: :direct)
+          NxSignal.Convolution.convolve(a, b, mode: :ham, method: :direct)
         end
       )
 
@@ -315,7 +321,7 @@ defmodule NxSignal.ConvolutionTest do
         ArgumentError,
         "expected method to be one of [:direct, :fft], got: :bacon",
         fn ->
-          convolve(a, b, mode: :full, method: :bacon)
+          NxSignal.Convolution.convolve(a, b, mode: :full, method: :bacon)
         end
       )
 
@@ -323,7 +329,7 @@ defmodule NxSignal.ConvolutionTest do
         ArgumentError,
         "expected method to be one of [:direct, :fft], got: :bacon",
         fn ->
-          convolve(a, b, mode: :same, method: :bacon)
+          NxSignal.Convolution.convolve(a, b, mode: :same, method: :bacon)
         end
       )
     end
@@ -333,10 +339,10 @@ defmodule NxSignal.ConvolutionTest do
       b = Nx.tensor([2, 3, 4, 5, 3, 4, 2, 2, 1])
       expected = Nx.tensor([70, 78, 73, 65]) |> Nx.as_type({:f, 32})
 
-      out = convolve(a, b, mode: :valid)
+      out = NxSignal.Convolution.convolve(a, b, mode: :valid)
       assert out == expected
 
-      out = convolve(b, a, mode: :valid)
+      out = NxSignal.Convolution.convolve(b, a, mode: :valid)
       assert out == expected
     end
 
@@ -345,10 +351,10 @@ defmodule NxSignal.ConvolutionTest do
       b = Nx.tensor([Complex.new(2, -3), Complex.new(1, 0)])
       expected = Nx.tensor([Complex.new(2, -3), Complex.new(8, -10)])
 
-      out = convolve(a, b, mode: :valid)
+      out = NxSignal.Convolution.convolve(a, b, mode: :valid)
       assert out == expected
 
-      out = convolve(b, a, mode: :valid)
+      out = NxSignal.Convolution.convolve(b, a, mode: :valid)
       assert out == expected
     end
 
@@ -356,7 +362,7 @@ defmodule NxSignal.ConvolutionTest do
       a = Nx.tensor([1, 2, 3, 3, 1, 2])
       b = Nx.tensor([1, 4, 3, 4, 5, 6, 7, 4, 3, 2, 1, 1, 3])
 
-      c = convolve(a, b, mode: :same)
+      c = NxSignal.Convolution.convolve(a, b, mode: :same)
       d = Nx.tensor([57, 61, 63, 57, 45, 36]) |> Nx.as_type({:f, 32})
       assert c == d
     end
@@ -375,11 +381,11 @@ defmodule NxSignal.ConvolutionTest do
         |> Nx.reshape({3, 2})
 
       assert_raise(ArgumentError, fn ->
-        convolve(a, b, mode: :valid)
+        NxSignal.Convolution.convolve(a, b, mode: :valid)
       end)
 
       assert_raise(ArgumentError, fn ->
-        convolve(b, a, mode: :valid)
+        NxSignal.Convolution.convolve(b, a, mode: :valid)
       end)
     end
 
@@ -392,8 +398,8 @@ defmodule NxSignal.ConvolutionTest do
         aT = Nx.as_type(a, t1)
         bT = Nx.as_type(b, t2)
 
-        outD = convolve(aT, bT, method: :direct)
-        outF = convolve(aT, bT, method: :fft)
+        outD = NxSignal.Convolution.convolve(aT, bT, method: :direct)
+        outF = NxSignal.Convolution.convolve(aT, bT, method: :fft)
 
         assert_all_close(outD, outF)
 
@@ -411,27 +417,27 @@ defmodule NxSignal.ConvolutionTest do
 
     test "mismatched dims" do
       assert_raise(ArgumentError, fn ->
-        convolve(Nx.tensor([1]), Nx.tensor(2), method: :direct)
+        NxSignal.Convolution.convolve(Nx.tensor([1]), Nx.tensor(2), method: :direct)
       end)
 
       assert_raise(ArgumentError, fn ->
-        convolve(Nx.tensor(1), Nx.tensor([2]), method: :direct)
+        NxSignal.Convolution.convolve(Nx.tensor(1), Nx.tensor([2]), method: :direct)
       end)
 
       assert_raise(ArgumentError, fn ->
-        convolve(Nx.tensor([1]), Nx.tensor(2), method: :fft)
+        NxSignal.Convolution.convolve(Nx.tensor([1]), Nx.tensor(2), method: :fft)
       end)
 
       assert_raise(ArgumentError, fn ->
-        convolve(Nx.tensor(1), Nx.tensor([2]), method: :fft)
+        NxSignal.Convolution.convolve(Nx.tensor(1), Nx.tensor([2]), method: :fft)
       end)
 
       assert_raise(ArgumentError, fn ->
-        convolve(Nx.tensor([1]), Nx.tensor([[2]]))
+        NxSignal.Convolution.convolve(Nx.tensor([1]), Nx.tensor([[2]]))
       end)
 
       assert_raise(ArgumentError, fn ->
-        convolve(Nx.tensor([3]), Nx.tensor(2))
+        NxSignal.Convolution.convolve(Nx.tensor([3]), Nx.tensor(2))
       end)
     end
 
@@ -439,17 +445,17 @@ defmodule NxSignal.ConvolutionTest do
       e = Nx.tensor([[2, 3, 4, 5, 6, 7, 8], [4, 5, 6, 7, 8, 9, 10]])
       f = Nx.tensor([[1, 2, 3], [3, 4, 5]])
       h = Nx.tensor([[62, 80, 98, 116, 134]]) |> Nx.as_type({:f, 32})
-      g = convolve(e, f, mode: :valid)
+      g = NxSignal.Convolution.convolve(e, f, mode: :valid)
       assert g == h
 
-      g = convolve(f, e, mode: :valid)
+      g = NxSignal.Convolution.convolve(f, e, mode: :valid)
       assert g == h
     end
 
     test "FFT real" do
       a = Nx.tensor([1, 2, 3])
       expected = Nx.tensor([1, 4, 10, 12, 9.0])
-      out = convolve(a, a, method: :fft)
+      out = NxSignal.Convolution.convolve(a, a, method: :fft)
       assert_all_close(out, expected)
     end
 
@@ -460,7 +466,7 @@ defmodule NxSignal.ConvolutionTest do
 
     #   a = Nx.tile(a, [2, 1])
     #   expected = Nx.tile(expected, [2, 1])
-    #   out = convolve(a, a, method: :fft)
+    #   out = NxSignal.Convolution.convolve(a, a, method: :fft)
     #   assert_all_close(out, expected)
     # end
 
@@ -476,14 +482,14 @@ defmodule NxSignal.ConvolutionTest do
           Complex.new(0, 18)
         ])
 
-      out = convolve(a, a, method: :fft)
+      out = NxSignal.Convolution.convolve(a, a, method: :fft)
       assert_all_close(out, expected)
     end
 
     test "FFT 2d real same" do
       a = Nx.tensor([[1, 2, 3], [4, 5, 6]])
       expected = Nx.tensor([[1, 4, 10, 12, 9], [8, 26, 56, 54, 36], [16, 40, 73, 60, 36]])
-      out = convolve(a, a, method: :fft)
+      out = NxSignal.Convolution.convolve(a, a, method: :fft)
       assert_all_close(out, expected)
     end
 
@@ -519,7 +525,7 @@ defmodule NxSignal.ConvolutionTest do
           ]
         ])
 
-      out = convolve(a, a, method: :fft)
+      out = NxSignal.Convolution.convolve(a, a, method: :fft)
       assert_all_close(out, expected)
     end
 
@@ -529,11 +535,11 @@ defmodule NxSignal.ConvolutionTest do
       expected_1 = Nx.tensor([35.0, 41.0, 47.0])
       expected_2 = Nx.tensor([9.0, 20.0, 25.0, 35.0, 41.0, 47.0, 39.0, 28.0, 2.0])
 
-      out = convolve(a, b, method: :fft, mode: :same)
+      out = NxSignal.Convolution.convolve(a, b, method: :fft, mode: :same)
 
       assert_all_close(out, expected_1)
 
-      out = convolve(b, a, method: :fft, mode: :same)
+      out = NxSignal.Convolution.convolve(b, a, method: :fft, mode: :same)
 
       assert_all_close(out, expected_2)
     end
@@ -544,11 +550,11 @@ defmodule NxSignal.ConvolutionTest do
 
       expected = Nx.tensor([24.0, 31.0, 41.0, 43.0, 49.0, 25.0, 12.0])
 
-      out = convolve(a, b, method: :fft, mode: :valid)
+      out = NxSignal.Convolution.convolve(a, b, method: :fft, mode: :valid)
 
       assert_all_close(out, expected)
 
-      out = convolve(b, a, method: :fft, mode: :valid)
+      out = NxSignal.Convolution.convolve(b, a, method: :fft, mode: :valid)
 
       assert_all_close(out, expected)
     end
@@ -566,22 +572,22 @@ defmodule NxSignal.ConvolutionTest do
 
     test "rank 1 valid" do
       {a, b, y_r} = setup_rank1()
-      y = correlate(a, b, mode: :valid)
+      y = NxSignal.Convolution.correlate(a, b, mode: :valid)
       assert_all_close(y, y_r[1..3])
 
-      y = correlate(b, a, mode: :valid)
+      y = NxSignal.Convolution.correlate(b, a, mode: :valid)
       assert_all_close(y, Nx.reverse(y_r[1..3], axes: [0]))
     end
 
     test "rank 1 same" do
       {a, b, y_r} = setup_rank1()
-      y = correlate(a, b, mode: :same)
+      y = NxSignal.Convolution.correlate(a, b, mode: :same)
       assert_all_close(y, y_r[0..-2//1])
     end
 
     test "rank 1 full" do
       {a, b, y_r} = setup_rank1()
-      y = correlate(a, b, mode: :full)
+      y = NxSignal.Convolution.correlate(a, b, mode: :full)
       assert_all_close(y, y_r)
     end
 
@@ -598,8 +604,8 @@ defmodule NxSignal.ConvolutionTest do
 
       y_r =
         Nx.add(
-          correlate(Nx.real(a), Nx.real(b), mode: mode),
-          correlate(Nx.imag(a), Nx.imag(b), mode: mode)
+          NxSignal.Convolution.correlate(Nx.real(a), Nx.real(b), mode: mode),
+          NxSignal.Convolution.correlate(Nx.imag(a), Nx.imag(b), mode: mode)
         )
 
       y_r =
@@ -608,8 +614,8 @@ defmodule NxSignal.ConvolutionTest do
           Nx.multiply(
             Complex.new(0, 1),
             Nx.add(
-              Nx.multiply(-1, correlate(Nx.real(a), Nx.imag(b), mode: mode)),
-              correlate(Nx.imag(a), Nx.real(b), mode: mode)
+              Nx.multiply(-1, NxSignal.Convolution.correlate(Nx.real(a), Nx.imag(b), mode: mode)),
+              NxSignal.Convolution.correlate(Nx.imag(a), Nx.real(b), mode: mode)
             )
           )
         )
@@ -619,7 +625,7 @@ defmodule NxSignal.ConvolutionTest do
 
     test "complex rank 1 valid" do
       {_key, a, b, y_r} = setup_rank1_complex(:valid)
-      y = correlate(a, b, mode: :valid)
+      y = NxSignal.Convolution.correlate(a, b, mode: :valid)
       assert_all_close(y, y_r)
     end
   end

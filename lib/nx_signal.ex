@@ -731,7 +731,6 @@ defmodule NxSignal do
 
     in_shape
     |> Tuple.delete_at(idx)
-    |> Tuple.delete_at(idx)
-    |> Tuple.append(out_len)
+    |> put_elem(idx, out_len)
   end
 end
