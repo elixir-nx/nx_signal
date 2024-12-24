@@ -292,7 +292,7 @@ defmodule NxSignal.Windows do
   deftransformp pop_window_size(opts) do
     {n, opts} = Keyword.pop(opts, :n)
 
-    unless n do
+    if !n do
       raise "missing :n option"
     end
 
