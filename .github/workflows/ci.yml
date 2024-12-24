@@ -21,6 +21,15 @@ jobs:
         with:
           otp-version: ${{ matrix.otp }}
           elixir-version: ${{ matrix.elixir }}
+      - name: Debug
+        run: |
+          ls -l
+          echo ${{ github.workspace }}
+          echo ${{ runner.os }}
+          echo ${{ matrix.otp }}
+          echo ${{ matrix.elixir }}
+          echo ${{ hashFiles('mix.lock') }}
+
       - name: Retrieve dependencies cache
         uses: actions/cache@v4
         id: mix-cache # id to use in retrieve action
