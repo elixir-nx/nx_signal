@@ -78,7 +78,7 @@ defmodule NxSignal.Internal do
             if Nx.abs(wn - w) <= tol * Nx.abs(wn) do
               {wn, {z, tol, 100}}
             else
-              {w, {z, tol, i + 1}}
+              {wn, {z, tol, i + 1}}
             end
           end
 
@@ -95,7 +95,7 @@ defmodule NxSignal.Internal do
             if Nx.abs(wn - w) <= tol * Nx.abs(wn) do
               {wn, {z, tol, 100}}
             else
-              {w, {z, tol, i + 1}}
+              {wn, {z, tol, i + 1}}
             end
           end
 
