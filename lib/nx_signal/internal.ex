@@ -65,6 +65,39 @@ defmodule NxSignal.Internal do
       end
 
     # Halley's Method
+    cond do
+      Nx.real(w) >= 0 ->
+        {w, _} =
+          while {w, {z, tol, i = 0}}, i < 100 do
+            ew = Nx.exp(-w)
+            wewz = w - z * ew
+            wn = w - wewz / (w + 1.0 - (w + 2.0) * wewz / (2.0 * w + 2.0))
+
+            if Nx.abs(wn - w) <= tol * Nx.abs(wn) do
+              {wn, {z, tol, 100}}
+            else
+              {w, {z, tol, i + 1}}
+            end
+          end
+
+        w
+
+      true ->
+        {w, _} =
+          while {w, {z, tol, i = 0}}, i < 100 do
+            ew = Nx.exp(w)
+            wewz = w * ew
+            wn = w - wewz / (wew + ew - (w + 2.0) * wewz / (2.0 * w + 2.0))
+
+            if Nx.abs(wn - w) <= tol * Nx.abs(wn) do
+              {wn, {z, tol, 100}}
+            else
+              {w, {z, tol, i + 1}}
+            end
+          end
+
+        w
+    end
   end
 
   defnp lambertw_branchpt(z) do
