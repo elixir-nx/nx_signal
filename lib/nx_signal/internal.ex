@@ -5,7 +5,9 @@ defmodule NxSignal.Internal do
   @omega 0.56714329040978387299997
   @expn1 0.36787944117144232159553
 
-  defn lambert_w(z, k, tol \\ 1.0e-8) do
+  defn lambert_w(z, k, opts \\ []) do
+    opts = keyword!(opts, tol: 1.0e-8)
+    tol = Nx.f64(opts[:tol])
     # z = Nx.as_type(z, z |> Nx.type() |> Nx.Type.to_complex())
     z = Nx.as_type(z, {:c, 128})
     rz = Nx.real(z)
@@ -28,7 +30,7 @@ defmodule NxSignal.Internal do
         end
 
       Nx.equal(z, 1) and k == 0 ->
-        @omega
+        Nx.f64(@omega)
 
       true ->
         halleys_method(z, k, tol)
@@ -42,7 +44,7 @@ defmodule NxSignal.Internal do
       cond do
         k == 0 ->
           cond do
-            Nx.abs(z + @expn1) < 0.3 ->
+            Nx.abs(z + Nx.f64(@expn1)) < 0.3 ->
               lambertw_branchpt(z)
 
             -1.0 < Nx.real(z) and Nx.real(z) < 1.5 and Nx.abs(Nx.imag(z)) < 1.0 and
@@ -55,7 +57,7 @@ defmodule NxSignal.Internal do
 
         k == -1 ->
           cond do
-            absz <= @expn1 and Nx.imag(z) == 0.0 and Nx.real(z) < 0.0 ->
+            absz <= Nx.f64(@expn1) and Nx.imag(z) == 0.0 and Nx.real(z) < 0.0 ->
               Nx.log(-Nx.real(z))
 
             true ->
@@ -105,23 +107,20 @@ defmodule NxSignal.Internal do
 
   defnp lambertw_branchpt(z) do
     m_e =
-      z
-      |> Nx.type()
-      |> Nx.Type.to_real()
-      |> Nx.Constants.e()
+      Nx.Constants.e({:f, 64})
 
     p = Nx.sqrt(2.0 * (m_e * z + 1.0))
 
-    cevalpoly_2(p, -1.0 / 3.0, 1.0, -1.0)
+    cevalpoly_2(p, Nx.f64(-1.0 / 3.0), Nx.f64(1.0), Nx.f64(-1.0))
   end
 
   defnp lambertw_pade0(z) do
-    z * cevalpoly_2(z, 12.85106382978723404255, 12.34042553191489361902, 1.0) /
-      cevalpoly_2(z, 32.53191489361702127660, 14.34042553191489361702, 1.0)
+    z * cevalpoly_2(z, Nx.f64(12.85106382978723404255), Nx.f64(12.34042553191489361902), 1.0) /
+      cevalpoly_2(z, Nx.f64(32.53191489361702127660), Nx.f64(14.34042553191489361702), 1.0)
   end
 
   defnp lambertw_asy(z, k) do
-    w = Nx.log(z) + 2.0 * Nx.Constants.pi() * k * Nx.Constants.i()
+    w = Nx.log(z) + 2.0 * Nx.Constants.pi(:f64) * k * Nx.Constants.i()
     w - Nx.log(w)
   end
 

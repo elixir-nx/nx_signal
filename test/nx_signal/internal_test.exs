@@ -11,7 +11,7 @@ defmodule NxSignal.InternalTest do
             {0, -1, Complex.new(:neg_infinity, 0)},
             {0, 1, Complex.new(:neg_infinity, 0)},
             {0, 3, Complex.new(:neg_infinity, 0)},
-            {Nx.to_number(Nx.Constants.e()), 0, 1},
+            {Nx.to_number(Nx.Constants.e({:f, 64})), 0, 1},
             {1, 0, 0.567143290409783873},
             {-Nx.to_number(Nx.Constants.pi()) / 2, 0,
              Complex.new(0, Nx.to_number(Nx.Constants.pi()) / 2)},
@@ -25,6 +25,7 @@ defmodule NxSignal.InternalTest do
             {0.25, 1, Complex.new(-3.00899800997004620, 4.07652978899159763)},
             {-0.25, 1, Complex.new(-3.48973228422959210, 7.41405453009603664)}
           ] do
+        IO.inspect([a, b])
         x = NxSignal.Internal.lambert_w(a, b)
         assert_all_close(x, y, atol: 1.0e-13, rtol: 1.0e-10)
       end
