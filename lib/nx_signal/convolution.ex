@@ -220,7 +220,7 @@ defmodule NxSignal.Convolution do
   deftransform oaconvolve(in1, in2, opts \\ []) do
     case {Nx.rank(in1), Nx.rank(in2)} do
       {0, 0} ->
-        Nx.multiply(a, a)
+        Nx.multiply(in1, in2)
 
       {a, a} ->
         if Nx.shape(in1) == Nx.shape(in2) do
@@ -240,7 +240,6 @@ defmodule NxSignal.Convolution do
         raise ArgumentError, message: "in1 and in2 should have the same rank"
     end
   end
-
 
   @doc """
   Computes the convolution of two tensors via FFT.
