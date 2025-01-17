@@ -125,7 +125,7 @@ defmodule NxSignal.Internal do
   end
 
   defnp cevalpoly_2(z, c0, c1, c2) do
-    s = Nx.abs(z)
+    s = Nx.abs(z) ** 2
     r = 2 * Nx.real(z)
     b = -s * c0 + c2
     a = r * c0 + c1
