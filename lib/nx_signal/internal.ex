@@ -5,11 +5,20 @@ defmodule NxSignal.Internal do
   @omega 0.56714329040978387299997
   @expn1 0.36787944117144232159553
 
-  defn lambert_w(z, k, opts \\ []) do
-    opts = keyword!(opts, tol: 1.0e-8)
-    tol = Nx.f64(opts[:tol])
-    # z = Nx.as_type(z, z |> Nx.type() |> Nx.Type.to_complex())
-    z = Nx.as_type(z, {:c, 128})
+  deftransform lambert_w(z, k, opts \\ []) do
+    opts = Keyword.validate!(opts, tol: 1.0e-8)
+
+    z =
+      if Nx.Type.complex?(Nx.type(z)) do
+        Nx.as_type(z, :c128)
+      else
+        Nx.complex(Nx.as_type(z, :f64), 0)
+      end
+
+    lambert_w_n(z, k, Nx.f64(opts[:tol]))
+  end
+
+  defnp lambert_w_n(z, k, tol) do
     rz = Nx.real(z)
 
     cond do
@@ -120,7 +129,9 @@ defmodule NxSignal.Internal do
   end
 
   defnp lambertw_asy(z, k) do
-    w = Nx.log(z) + 2.0 * Nx.Constants.pi(:f64) * k * Nx.Constants.i()
+    w =
+      Nx.log(z) + 2.0 * Nx.Constants.pi(:f64) * k * Nx.Constants.i()
+
     w - Nx.log(w)
   end
 
