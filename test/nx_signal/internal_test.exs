@@ -1,6 +1,5 @@
 defmodule NxSignal.InternalTest do
   use NxSignal.Case, async: true, validate_doc_metadata: false
-  import NxSignal.Helpers
 
   describe "lambert_w/3" do
     test "scipy values" do
