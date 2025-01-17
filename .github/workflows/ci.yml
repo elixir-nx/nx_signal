@@ -11,8 +11,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        elixir: ["1.14.0"]
-        otp: ["24.0"]
+        elixir: ["1.18.0"]
+        otp: ["27.0"]
     env:
       MIX_ENV: test
     steps:
@@ -22,11 +22,11 @@ jobs:
           otp-version: ${{ matrix.otp }}
           elixir-version: ${{ matrix.elixir }}
       - name: Retrieve dependencies cache
-        uses: actions/cache@v1
+        uses: actions/cache@v4
         id: mix-cache # id to use in retrieve action
         with:
           path: deps
-          key: v1-${{ matrix.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
+          key: v1-${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-${{ hashFiles('mix.lock') }}
       - name: Install dependencies
         if: ${{ steps.mix-cache.outputs.cache-hit != 'true' }}
         run: mix deps.get
@@ -42,8 +42,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        elixir: ["1.14.0"]
-        otp: ["24.0"]
+        elixir: ["1.18.0"]
+        otp: ["27.0"]
     env:
       MIX_ENV: test
     steps:
@@ -57,11 +57,11 @@ jobs:
           otp-version: ${{ matrix.otp }}
           elixir-version: ${{ matrix.elixir }}
       - name: Retrieve dependencies cache
-        uses: actions/cache@v1
+        uses: actions/cache@v4
         id: mix-cache # id to use in retrieve action
         with:
           path: deps
-          key: v1-${{ matrix.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
+          key: v1-${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-${{ hashFiles('mix.lock') }}
       - name: Install dependencies
         if: ${{ steps.mix-cache.outputs.cache-hit != 'true' }}
         run: mix deps.get
