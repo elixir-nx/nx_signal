@@ -56,7 +56,7 @@ defmodule NxSignal.InternalTest do
              Complex.new(-3.54858738151989450, -6.91627921869943589)},
             {Complex.divide(Complex.new(-2, -1), 10), 4,
              Complex.new(-4.5500846928118151, 20.6672982215434637)},
-            {Nx.Constants.pi(), 0, 1.073658194796149172092178407024821347547745350410314531}
+            {Nx.Constants.pi(:f64), 0, 1.073658194796149172092178407024821347547745350410314531}
           ] do
         x = NxSignal.Internal.lambert_w(a, b)
         assert_all_close(x, as_tensor(y), atol: 1.0e-13, rtol: 1.0e-10)
