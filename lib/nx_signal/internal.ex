@@ -15,31 +15,29 @@ defmodule NxSignal.Internal do
         Nx.complex(Nx.as_type(z, :f64), 0)
       end
 
-    lambert_w_n(z, k, Nx.f64(opts[:tol]))
+    lambert_w_n(z, k, tol: opts[:tol])
   end
 
-  defnp lambert_w_n(z, k, tol) do
+  defnp lambert_w_n(z, k, opts) do
+    tol = opts[:tol]
+
     rz = Nx.real(z)
 
     cond do
       Nx.is_infinity(rz) and rz > 0 ->
-        z + 2.0 * Nx.Constants.pi() * k * Nx.Constants.i()
+        z + 2.0 * Nx.Constants.pi(:f64) * k * Nx.Constants.i()
 
       Nx.is_infinity(rz) and rz < 0 ->
-        -z + 2.0 * Nx.Constants.pi() * k * Nx.Constants.i()
+        -z + 2.0 * Nx.Constants.pi(:f64) * k * Nx.Constants.i()
 
-      Nx.real(z) == 0 and Nx.imag(z) == 0 ->
-        if k == 0 do
-          z
-        else
-          z
-          |> Nx.type()
-          |> Nx.Type.to_real()
-          |> Nx.Constants.neg_infinity()
-        end
+      z == 0 and k == 0 ->
+        z
+
+      z == 0 ->
+        Nx.Constants.neg_infinity(:f64)
 
       Nx.equal(z, 1) and k == 0 ->
-        Nx.f64(@omega)
+        @omega
 
       true ->
         halleys_method(z, k, tol)
@@ -53,7 +51,7 @@ defmodule NxSignal.Internal do
       cond do
         k == 0 ->
           cond do
-            Nx.abs(z + Nx.f64(@expn1)) < 0.3 ->
+            Nx.abs(z + @expn1) < 0.3 ->
               lambertw_branchpt(z)
 
             -1.0 < Nx.real(z) and Nx.real(z) < 1.5 and Nx.abs(Nx.imag(z)) < 1.0 and
@@ -64,14 +62,11 @@ defmodule NxSignal.Internal do
               lambertw_asy(z, k)
           end
 
-        k == -1 ->
-          cond do
-            absz <= Nx.f64(@expn1) and Nx.imag(z) == 0.0 and Nx.real(z) < 0.0 ->
-              Nx.log(-Nx.real(z))
+        k == -1 and absz <= @expn1 and Nx.imag(z) == 0.0 and Nx.real(z) < 0.0 ->
+          Nx.log(-Nx.real(z))
 
-            true ->
-              lambertw_asy(z, k)
-          end
+        k == -1 ->
+          lambertw_asy(z, k)
 
         true ->
           lambertw_asy(z, k)
@@ -116,16 +111,16 @@ defmodule NxSignal.Internal do
 
   defnp lambertw_branchpt(z) do
     m_e =
-      Nx.Constants.e({:f, 64})
+      Nx.Constants.e(:f64)
 
     p = Nx.sqrt(2.0 * (m_e * z + 1.0))
 
-    cevalpoly_2(p, Nx.f64(-1.0 / 3.0), Nx.f64(1.0), Nx.f64(-1.0))
+    cevalpoly_2(p, -1.0 / 3.0, 1.0, -1.0)
   end
 
   defnp lambertw_pade0(z) do
-    z * cevalpoly_2(z, Nx.f64(12.85106382978723404255), Nx.f64(12.34042553191489361902), 1.0) /
-      cevalpoly_2(z, Nx.f64(32.53191489361702127660), Nx.f64(14.34042553191489361702), 1.0)
+    z * cevalpoly_2(z, 12.85106382978723404255, 12.34042553191489361902, 1.0) /
+      cevalpoly_2(z, 32.53191489361702127660, 14.34042553191489361702, 1.0)
   end
 
   defnp lambertw_asy(z, k) do

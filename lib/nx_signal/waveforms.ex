@@ -70,17 +70,17 @@ defmodule NxSignal.Waveforms do
       iex> t = Nx.iota({10}) |> Nx.multiply(:math.pi() * 2 / 10)
       iex> NxSignal.Waveforms.square(t, duty: 0.1)
       #Nx.Tensor<
-        s64[10]
+        s32[10]
         [1, -1, -1, -1, -1, -1, -1, -1, -1, -1]
       >
       iex> NxSignal.Waveforms.square(t, duty: 0.5)
       #Nx.Tensor<
-        s64[10]
+        s32[10]
         [1, 1, 1, 1, 1, -1, -1, -1, -1, -1]
       >
       iex> NxSignal.Waveforms.square(t, duty: 1)
       #Nx.Tensor<
-        s64[10]
+        s32[10]
         [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
       >
 
@@ -88,7 +88,7 @@ defmodule NxSignal.Waveforms do
       iex> duty = Nx.tensor([0.1, 0, 0.3, 0, 0.5, 0, 0.7, 0, 0.9, 0])
       iex> NxSignal.Waveforms.square(t, duty: duty)
       #Nx.Tensor<
-        s64[10]
+        s32[10]
         [1, -1, 1, -1, 1, -1, 1, -1, 1, -1]
       >
   """
@@ -382,9 +382,9 @@ defmodule NxSignal.Waveforms do
         [1.0, 0.0]
       >
 
-      iex> NxSignal.Waveforms.unit_impulse({3, 5}, type: :s64, index: :midpoint)
+      iex> NxSignal.Waveforms.unit_impulse({3, 5}, type: :s32, index: :midpoint)
       #Nx.Tensor<
-        s64[3][5]
+        s32[3][5]
         [
           [0, 0, 0, 0, 0],
           [0, 0, 1, 0, 0],
@@ -392,9 +392,9 @@ defmodule NxSignal.Waveforms do
         ]
       >
 
-      iex> NxSignal.Waveforms.unit_impulse({3, 5}, index: Nx.tensor([[2, 3]]), type: :s64)
+      iex> NxSignal.Waveforms.unit_impulse({3, 5}, index: Nx.tensor([[2, 3]]), type: :s32)
       #Nx.Tensor<
-        s64[3][5]
+        s32[3][5]
         [
           [0, 0, 0, 0, 0],
           [0, 0, 0, 0, 0],

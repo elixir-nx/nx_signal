@@ -181,7 +181,7 @@ defmodule NxSignal do
 
       iex> NxSignal.as_windowed(Nx.tensor([0, 1, 2, 3, 4, 10, 11, 12]), window_length: 4)
       #Nx.Tensor<
-        s64[5][4]
+        s32[5][4]
         [
           [0, 1, 2, 3],
           [1, 2, 3, 4],
@@ -193,7 +193,7 @@ defmodule NxSignal do
 
       iex> NxSignal.as_windowed(Nx.tensor([0, 1, 2, 3, 4, 10, 11, 12]), window_length: 3)
       #Nx.Tensor<
-        s64[6][3]
+        s32[6][3]
         [
           [0, 1, 2],
           [1, 2, 3],
@@ -206,7 +206,7 @@ defmodule NxSignal do
 
       iex> NxSignal.as_windowed(Nx.tensor([0, 1, 2, 3, 4, 10, 11]), window_length: 2, stride: 2, padding: [{0, 3}])
       #Nx.Tensor<
-        s64[5][2]
+        s32[5][2]
         [
           [0, 1],
           [2, 3],
@@ -219,7 +219,7 @@ defmodule NxSignal do
       iex> t = Nx.iota({7});
       iex> NxSignal.as_windowed(t, window_length: 6, padding: :reflect, stride: 1)
       #Nx.Tensor<
-        s64[8][6]
+        s32[8][6]
         [
           [3, 2, 1, 0, 1, 2],
           [2, 1, 0, 1, 2, 3],
@@ -234,7 +234,7 @@ defmodule NxSignal do
 
       iex> NxSignal.as_windowed(Nx.iota({10}), window_length: 6, padding: :reflect, stride: 2)
       #Nx.Tensor<
-        s64[6][6]
+        s32[6][6]
         [
           [3, 2, 1, 0, 1, 2],
           [1, 0, 1, 2, 3, 4],
@@ -549,7 +549,7 @@ defmodule NxSignal do
       iex> result = NxSignal.istft(z, w, opts)
       iex> Nx.as_type(result, Nx.type(t))
       #Nx.Tensor<
-        s64[8]
+        s32[8]
         [0, 10, 1, 0, 10, 10, 2, 20]
       >
 
@@ -563,7 +563,7 @@ defmodule NxSignal do
       iex> result = NxSignal.istft(z, w, opts)
       iex> Nx.as_type(result, Nx.type(t))
       #Nx.Tensor<
-        s64[8]
+        s32[8]
         [0, 10, 1, 0, 10, 10, 2, 20]
       >
 
@@ -655,13 +655,13 @@ defmodule NxSignal do
 
       iex> NxSignal.overlap_and_add(Nx.iota({3, 4}), overlap_length: 0)
       #Nx.Tensor<
-        s64[12]
+        s32[12]
         [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
       >
 
       iex> NxSignal.overlap_and_add(Nx.iota({3, 4}), overlap_length: 3)
       #Nx.Tensor<
-        s64[6]
+        s32[6]
         [0, 5, 15, 18, 17, 11]
       >
 
@@ -669,7 +669,7 @@ defmodule NxSignal do
       iex> NxSignal.overlap_and_add(t, overlap_length: 3)
       #Nx.Tensor<
         vectorized[x: 2][y: 1]
-        s64[5]
+        s32[5]
         [
           [
             [0, 5, 7, 9, 7]

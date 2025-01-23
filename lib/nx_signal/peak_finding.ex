@@ -36,12 +36,12 @@ defmodule NxSignal.PeakFinding do
       iex> %{indices: indices, valid_indices: valid_indices} = NxSignal.PeakFinding.argrelmin(x)
       iex> valid_indices
       #Nx.Tensor<
-        u64
+        u32
         2
       >
       iex> indices
       #Nx.Tensor<
-        s64[8][1]
+        s32[8][1]
         [
           [1],
           [5],
@@ -55,7 +55,7 @@ defmodule NxSignal.PeakFinding do
       >
       iex> Nx.slice_along_axis(indices, 0, Nx.to_number(valid_indices), axis: 0)
       #Nx.Tensor<
-        s64[2][1]
+        s32[2][1]
         [
           [1],
           [5]
@@ -69,12 +69,12 @@ defmodule NxSignal.PeakFinding do
       iex> %{indices: indices, valid_indices: valid_indices} = NxSignal.PeakFinding.argrelmin(x, order: 3)
       iex> valid_indices
       #Nx.Tensor<
-        u64
+        u32
         1
       >
       iex> indices
       #Nx.Tensor<
-        s64[8][1]
+        s32[8][1]
         [
           [1],
           [-1],
@@ -88,7 +88,7 @@ defmodule NxSignal.PeakFinding do
       >
       iex> Nx.slice_along_axis(indices, 0, Nx.to_number(valid_indices), axis: 0)
       #Nx.Tensor<
-        s64[1][1]
+        s32[1][1]
         [
           [1]
         ]
@@ -100,12 +100,12 @@ defmodule NxSignal.PeakFinding do
       iex> %{indices: indices, valid_indices: valid_indices} = NxSignal.PeakFinding.argrelmin(x)
       iex> valid_indices
       #Nx.Tensor<
-        u64
+        u32
         2
       >
       iex> indices[0..1]
       #Nx.Tensor<
-        s64[2][2]
+        s32[2][2]
         [
           [1, 2],
           [1, 3]
@@ -114,12 +114,12 @@ defmodule NxSignal.PeakFinding do
       iex> %{indices: indices} = NxSignal.PeakFinding.argrelmin(x, axis: 1)
       iex> valid_indices
       #Nx.Tensor<
-        u64
+        u32
         2
       >
       iex> indices[0..1]
       #Nx.Tensor<
-        s64[2][2]
+        s32[2][2]
         [
           [0, 2],
           [2, 1]
@@ -163,12 +163,12 @@ defmodule NxSignal.PeakFinding do
       iex> %{indices: indices, valid_indices: valid_indices} = NxSignal.PeakFinding.argrelmax(x)
       iex> valid_indices
       #Nx.Tensor<
-        u64
+        u32
         2
       >
       iex> indices
       #Nx.Tensor<
-        s64[8][1]
+        s32[8][1]
         [
           [3],
           [6],
@@ -182,7 +182,7 @@ defmodule NxSignal.PeakFinding do
       >
       iex> Nx.slice_along_axis(indices, 0, Nx.to_number(valid_indices), axis: 0)
       #Nx.Tensor<
-        s64[2][1]
+        s32[2][1]
         [
           [3],
           [6]
@@ -196,12 +196,12 @@ defmodule NxSignal.PeakFinding do
       iex> %{indices: indices, valid_indices: valid_indices} = NxSignal.PeakFinding.argrelmax(x, order: 3)
       iex> valid_indices
       #Nx.Tensor<
-        u64
+        u32
         1
       >
       iex> indices
       #Nx.Tensor<
-        s64[8][1]
+        s32[8][1]
         [
           [3],
           [-1],
@@ -215,7 +215,7 @@ defmodule NxSignal.PeakFinding do
       >
       iex> Nx.slice_along_axis(indices, 0, Nx.to_number(valid_indices), axis: 0)
       #Nx.Tensor<
-        s64[1][1]
+        s32[1][1]
         [
           [3]
         ]
@@ -227,23 +227,23 @@ defmodule NxSignal.PeakFinding do
       iex> %{indices: indices, valid_indices: valid_indices} = NxSignal.PeakFinding.argrelmax(x)
       iex> valid_indices
       #Nx.Tensor<
-        u64
+        u32
         1
       >
       iex> indices[0]
       #Nx.Tensor<
-        s64[2]
+        s32[2]
         [1, 0]
       >
       iex> %{indices: indices} = NxSignal.PeakFinding.argrelmax(x, axis: 1)
       iex> valid_indices
       #Nx.Tensor<
-        u64
+        u32
         1
       >
       iex> indices[0]
       #Nx.Tensor<
-        s64[2]
+        s32[2]
         [0, 1]
       >
 
@@ -297,12 +297,12 @@ defmodule NxSignal.PeakFinding do
       iex> result = NxSignal.PeakFinding.argrelextrema(x, comparator)
       iex> result.valid_indices
       #Nx.Tensor<
-        u64
+        u32
         3
       >
       iex> result.indices[0..2]
       #Nx.Tensor<
-        s64[3][1]
+        s32[3][1]
         [
           [5],
           [7],
@@ -325,12 +325,12 @@ defmodule NxSignal.PeakFinding do
       iex> result = NxSignal.PeakFinding.argrelextrema(x, comparator)
       iex> result.valid_indices
       #Nx.Tensor<
-        u64
+        u32
         1
       >
       iex> result.indices[0..0]
       #Nx.Tensor<
-        s64[1][1]
+        s32[1][1]
         [
           [4]
         ]
