@@ -629,4 +629,27 @@ defmodule NxSignal.ConvolutionTest do
       assert_all_close(y, y_r)
     end
   end
+
+  # describe "oaconvolve/3" do
+  #   def gen_oa_shapes_eq(list) do
+  #     for a <- list, b <- list, a >= b do
+  #       {a, b}
+  #     end
+  #   end
+
+  #   test "real many lens" do
+  #     inputs = gen_oa_shapes_eq(Enum.to_list(0..99) ++ Enum.to_list(100..999//23))
+  #     key = Nx.Random.key(123)
+
+  #     for {shape_a, shape_b} <- inputs do
+  #       {a, key} = Nx.Random.uniform(key, 0, 1, shape: {shape_a})
+  #       {b, key} = Nx.Random.uniform(key, 0, 1, shape: {shape_b})
+
+  #       expected = convolve(a, b, method: "fft")
+  #       out = oaconvolve(a, b)
+
+  #       assert_all_close(expected, out)
+  #     end
+  #   end
+  # end
 end
