@@ -25,10 +25,10 @@ defmodule NxSignal.Internal do
 
     cond do
       Nx.is_infinity(rz) and rz > 0 ->
-        z + 2.0 * Nx.Constants.pi(:f64) * k * Nx.Constants.i()
+        z + 2.0 * Nx.Constants.pi() * k * Nx.Constants.i()
 
       Nx.is_infinity(rz) and rz < 0 ->
-        -z + 2.0 * Nx.Constants.pi(:f64) * k * Nx.Constants.i()
+        -z + 2.0 * Nx.Constants.pi() * k * Nx.Constants.i()
 
       z == 0 and k == 0 ->
         z
@@ -111,7 +111,7 @@ defmodule NxSignal.Internal do
 
   defnp lambertw_branchpt(z) do
     m_e =
-      Nx.Constants.e(:f64)
+      Nx.Constants.e()
 
     p = Nx.sqrt(2.0 * (m_e * z + 1.0))
 
@@ -125,7 +125,7 @@ defmodule NxSignal.Internal do
 
   defnp lambertw_asy(z, k) do
     w =
-      Nx.log(z) + 2.0 * Nx.Constants.pi(:f64) * k * Nx.Constants.i()
+      Nx.log(z) + 2.0 * Nx.Constants.pi() * k * Nx.Constants.i()
 
     w - Nx.log(w)
   end
