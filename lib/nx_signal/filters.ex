@@ -58,8 +58,11 @@ defmodule NxSignal.Filters do
   Applies a Wiener filter to the given Nx tensor.
 
   ## Options
-      * `:kernel_size` - filter size (scalar or tuple). Defaults to `3`.
-      * `:noise` - noise power, auto-estimated if `nil`. Defaults to `nil`.
+
+      * `:kernel_size` - filter size given either a number or a tuple. 
+        If a number is given, a kernel with the given size, and same number of axes 
+        as the input tensor will be used. Defaults to `3`.
+      * `:noise` - noise power, given as a scalar. This will be estimated based on the input tensor if `nil`. Defaults to `nil`.
 
   ## Examples
 
