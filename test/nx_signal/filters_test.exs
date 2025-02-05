@@ -116,4 +116,129 @@ defmodule NxSignal.FiltersTest do
       )
     end
   end
+
+  describe "wiener/2" do
+    test "performs n-dim wiener filter with calculated noise" do
+      im =
+        Nx.tensor(
+          [
+            [1.0, 2.0, 3.0, 4.0, 5.0],
+            [6.0, 7.0, 8.0, 9.0, 10.0],
+            [11.0, 12.0, 13.0, 14.0, 15.0]
+          ],
+          type: :f64
+        )
+
+      kernel_size = {3, 3}
+
+      expected =
+        Nx.tensor(
+          [
+            [
+              1.7777777777777777,
+              3.0,
+              3.6666666666666665,
+              4.333333333333333,
+              3.111111111111111
+            ],
+            [4.3366520642506305, 7.0, 8.0, 9.0, 7.58637597408283],
+            [
+              4.692197051420351,
+              7.261706150595039,
+              8.748939779474131,
+              10.157992415073023,
+              9.813815742524799
+            ]
+          ],
+          type: :f64
+        )
+
+      assert NxSignal.Filters.wiener(im, kernel_size: kernel_size) == expected
+      assert NxSignal.Filters.wiener(im, kernel_size: 3) == expected
+
+      assert NxSignal.Filters.wiener(Nx.as_type(im, :f32), kernel_size: kernel_size) ==
+               Nx.tensor([
+                 [
+                   1.7777777910232544,
+                   3.0,
+                   3.6666667461395264,
+                   4.333333492279053,
+                   3.1111111640930176
+                 ],
+                 [4.3366522789001465, 7.0, 8.0, 9.0, 7.586376190185547],
+                 [
+                   4.692196846008301,
+                   7.261706352233887,
+                   8.748939514160156,
+                   10.157992362976074,
+                   9.81381607055664
+                 ]
+               ])
+    end
+
+    test "performs n-dim wiener filter with parameterized noise" do
+      im =
+        Nx.tensor(
+          [
+            [1.0, 2.0, 3.0, 4.0, 5.0],
+            [6.0, 7.0, 8.0, 9.0, 10.0],
+            [11.0, 12.0, 13.0, 14.0, 15.0]
+          ],
+          type: :f64
+        )
+
+      kernel_size = {3, 3}
+
+      assert NxSignal.Filters.wiener(im, kernel_size: kernel_size, noise: 10) ==
+               Nx.tensor(
+                 [
+                   [
+                     1.7777777777777777,
+                     3.0,
+                     3.5882352941176467,
+                     4.238095238095238,
+                     3.7397034596375622
+                   ],
+                   [5.193548387096774, 7.0, 8.0, 9.0, 8.829787234042554],
+                   [
+                     7.941747572815534,
+                     9.702702702702702,
+                     10.938931297709924,
+                     12.137254901960784,
+                     12.485549132947977
+                   ]
+                 ],
+                 type: :f64
+               )
+
+      assert NxSignal.Filters.wiener(Nx.as_type(im, :f32), kernel_size: kernel_size, noise: 10) ==
+               Nx.tensor([
+                 [
+                   1.7777777910232544,
+                   3.0,
+                   3.588235378265381,
+                   4.238095283508301,
+                   3.739703416824341
+                 ],
+                 [5.193548202514648, 7.0, 8.0, 9.0, 8.829787254333496],
+                 [
+                   7.941747665405273,
+                   9.702702522277832,
+                   10.938931465148926,
+                   12.13725471496582,
+                   12.485548973083496
+                 ]
+               ])
+
+      assert NxSignal.Filters.wiener(im, kernel_size: kernel_size, noise: 0) ==
+               Nx.tensor(
+                 [
+                   [1.0, 2.0, 3.0, 4.0, 5.0],
+                   [6.0, 7.0, 8.0, 9.0, 10.0],
+                   [11.0, 12.0, 13.0, 14.0, 15.0]
+                 ],
+                 type: :f64
+               )
+    end
+  end
 end
