@@ -289,6 +289,84 @@ defmodule NxSignal.Windows do
     end
   end
 
+  @doc """
+  Creates a Kaiser window of size `window_length`.
+
+  The Kaiser window is a taper formed by using a Bessel function.
+
+  ## Options
+
+    * `:n` - The window length. Mandatory option.
+    * `:is_periodic` - If `true`, produces a periodic window,
+       otherwise produces a symmetric window. Defaults to `true`
+    * `:type` - the output type for the window. Defaults to `{:f, 32}`
+    * `:beta` - Shape parameter for the window. As beta increases, the window becomes more focused in frequency domain. Defaults to 12.0.
+    * `:eps` - Epsilon value to avoid division by zero. Defaults to 1.0e-7.
+    * `:axis_name` - the axis name. Defaults to `nil`
+
+  ## Examples
+      iex> NxSignal.Windows.kaiser(n: 4, beta: 12.0, is_periodic: true)
+      #Nx.Tensor<
+        f32[4]
+        [5.2776191296288744e-5, 0.21566666662693024, 1.0, 0.21566666662693024]
+      >
+
+      iex> NxSignal.Windows.kaiser(n: 5, beta: 12.0, is_periodic: true)
+      #Nx.Tensor<
+        f32[5]
+        [5.2776191296288744e-5, 0.10171464085578918, 0.7929369807243347, 0.7929369807243347, 0.10171464085578918]
+      >
+
+      iex> NxSignal.Windows.kaiser(n: 4, beta: 12.0, is_periodic: false)
+      #Nx.Tensor<
+        f32[4]
+        [5.2776191296288744e-5, 0.5188394784927368, 0.5188390612602234, 5.2776191296288744e-5]
+      >
+  """
+  @doc type: :windowing
+  defn kaiser(opts \\ []) do
+    opts =
+      keyword!(opts, [:n, :axis_name, eps: 1.0e-7, beta: 12.0, is_periodic: true, type: {:f, 32}])
+
+    {l, opts} = pop_window_size(opts)
+    name = opts[:axis_name]
+    type = opts[:type]
+    beta = opts[:beta]
+    eps = opts[:eps]
+    is_periodic = opts[:is_periodic]
+
+    window_length = if is_periodic, do: l + 1, else: l
+
+    ratio = Nx.linspace(-1, 1, n: window_length, endpoint: true, type: type) |> Nx.rename([name])
+    sqrt_arg = Nx.max(1 - ratio ** 2, eps)
+    r = beta * Nx.sqrt(sqrt_arg)
+
+    window = kaiser_bessel_i0(r) / kaiser_bessel_i0(beta)
+
+    if is_periodic do
+      Nx.slice(window, [0], [l])
+    else
+      window
+    end
+  end
+
+  defnp kaiser_bessel_i0(x) do
+    abs_x = Nx.abs(x)
+
+    small_x_result =
+      1 +
+        abs_x ** 2 / 4 +
+        abs_x ** 4 / 64 +
+        abs_x ** 6 / 2304 +
+        abs_x ** 8 / 147_456
+
+    large_x_result =
+      Nx.exp(abs_x) / Nx.sqrt(2 * Nx.Constants.pi() * abs_x) *
+        (1 + 1 / (8 * abs_x) + 9 / (128 * Nx.pow(abs_x, 2)))
+
+    Nx.select(abs_x < 3.75, small_x_result, large_x_result)
+  end
+
   deftransformp pop_window_size(opts) do
     {n, opts} = Keyword.pop(opts, :n)
 
