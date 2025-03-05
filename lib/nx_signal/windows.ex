@@ -385,17 +385,13 @@ defmodule NxSignal.Windows do
     Nx.select(abs_x < 3.75, small_x_result, large_x_result)
   end
 
-  deftransformp integer_div_ceil(num, den) do
-    if is_integer(num) and is_integer(den) do
-      rem = rem(num, den)
+  deftransformp integer_div_ceil(num, den) when is_integer(num) and is_integer(den) do
+    rem = rem(num, den)
 
-      if rem == 0 do
-        div(num, den)
-      else
-        div(num, den) + 1
-      end
+    if rem == 0 do
+      div(num, den)
     else
-      ceil(num / den)
+      div(num, den) + 1
     end
   end
 end
