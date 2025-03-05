@@ -43,7 +43,7 @@ defmodule NxSignal do
 
   ## Examples
 
-      iex> {z, t, f} = NxSignal.stft(Nx.iota({4}), NxSignal.Windows.rectangular(n: 2), overlap_length: 1, fft_length: 2, sampling_rate: 400)
+      iex> {z, t, f} = NxSignal.stft(Nx.iota({4}), NxSignal.Windows.rectangular(2), overlap_length: 1, fft_length: 2, sampling_rate: 400)
       iex> z
       #Nx.Tensor<
         c64[frames: 3][frequencies: 2]
@@ -464,7 +464,7 @@ defmodule NxSignal do
 
       iex> fft_length = 16
       iex> sampling_rate = 8.0e3
-      iex> {z, _, _} = NxSignal.stft(Nx.iota({10}), NxSignal.Windows.hann(n: 4), overlap_length: 2, fft_length: fft_length, sampling_rate: sampling_rate, window_padding: :reflect)
+      iex> {z, _, _} = NxSignal.stft(Nx.iota({10}), NxSignal.Windows.hann( 4), overlap_length: 2, fft_length: fft_length, sampling_rate: sampling_rate, window_padding: :reflect)
       iex> Nx.axis_size(z, :frequencies)
       16
       iex> Nx.axis_size(z, :frames)
@@ -543,7 +543,7 @@ defmodule NxSignal do
   of the signal end up being distorted.
 
       iex> t = Nx.tensor([10, 10, 1, 0, 10, 10, 2, 20])
-      iex> w = NxSignal.Windows.hann(n: 4)
+      iex> w = NxSignal.Windows.hann( 4)
       iex> opts = [sampling_rate: 1, fft_length: 4]
       iex> {z, _time, _freqs} = NxSignal.stft(t, w, opts)
       iex> result = NxSignal.istft(z, w, opts)
@@ -557,7 +557,7 @@ defmodule NxSignal do
   For perfect reconstruction, you want to use the same scaling as the STFT:
 
       iex> t = Nx.tensor([10, 10, 1, 0, 10, 10, 2, 20])
-      iex> w = NxSignal.Windows.hann(n: 4)
+      iex> w = NxSignal.Windows.hann( 4)
       iex> opts = [scaling: :spectrum, sampling_rate: 1, fft_length: 4]
       iex> {z, _time, _freqs} = NxSignal.stft(t, w, opts)
       iex> result = NxSignal.istft(z, w, opts)
@@ -568,7 +568,7 @@ defmodule NxSignal do
       >
 
       iex> t = Nx.tensor([10, 10, 1, 0, 10, 10, 2, 20], type: :f32)
-      iex> w = NxSignal.Windows.hann(n: 4)
+      iex> w = NxSignal.Windows.hann( 4)
       iex> opts = [scaling: :psd, sampling_rate: 1, fft_length: 4]
       iex> {z, _time, _freqs} = NxSignal.stft(t, w, opts)
       iex> result = NxSignal.istft(z, w, opts)
