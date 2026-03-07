@@ -241,4 +241,178 @@ defmodule NxSignal.FiltersTest do
                )
     end
   end
+
+  describe "firwin/3" do
+    # Reference values generated with scipy.signal.firwin
+
+    test "lowpass with default hamming window" do
+      expected =
+        Nx.tensor([
+          0.020103708268285354,
+          0.23086668180542194,
+          0.4980592198525855,
+          0.23086668180542194,
+          0.020103708268285354
+        ])
+
+      assert_all_close(NxSignal.Filters.firwin(5, 0.3), expected, atol: 1.0e-5)
+    end
+
+    test "highpass with hamming window" do
+      expected =
+        Nx.tensor([
+          0.004998140998601554,
+          -0.02905169455437149,
+          -0.23351680322070983,
+          0.6010660646645265,
+          -0.2335168032207099,
+          -0.02905169455437152,
+          0.004998140998601554
+        ])
+
+      assert_all_close(
+        NxSignal.Filters.firwin(7, 0.4, pass_zero: false),
+        expected,
+        atol: 1.0e-5
+      )
+    end
+
+    test "bandpass with hann window" do
+      expected =
+        Nx.tensor([
+          0.0,
+          -0.034265228115753485,
+          -0.17548320982592003,
+          0.14143709641554006,
+          0.5732069654682745,
+          0.14143709641554006,
+          -0.17548320982592003,
+          -0.034265228115753485,
+          0.0
+        ])
+
+      assert_all_close(
+        NxSignal.Filters.firwin(9, [0.2, 0.6], pass_zero: false, window: :hann),
+        expected,
+        atol: 1.0e-5
+      )
+    end
+
+    test "bandstop with blackman window" do
+      expected =
+        Nx.tensor([
+          0.0,
+          -0.004174601858029537,
+          0.0,
+          0.17126025417159732,
+          0.0,
+          0.6658286953728643,
+          0.0,
+          0.17126025417159732,
+          0.0,
+          -0.004174601858029537,
+          0.0
+        ])
+
+      assert_all_close(
+        NxSignal.Filters.firwin(11, [0.3, 0.7], window: :blackman),
+        expected,
+        atol: 1.0e-5
+      )
+    end
+
+    test "lowpass with kaiser window" do
+      expected =
+        Nx.tensor([
+          -0.003951274147023466,
+          0.0,
+          0.25034887446528337,
+          0.5072047993634803,
+          0.25034887446528337,
+          0.0,
+          -0.003951274147023466
+        ])
+
+      assert_all_close(
+        NxSignal.Filters.firwin(7, 0.5, window: {:kaiser, 5.0}),
+        expected,
+        atol: 1.0e-3
+      )
+    end
+
+    test "lowpass with rectangular window" do
+      expected =
+        Nx.tensor([
+          -0.058404528708691714,
+          0.08760679306303756,
+          0.28350153764274655,
+          0.37459239600581506,
+          0.28350153764274655,
+          0.08760679306303756,
+          -0.058404528708691714
+        ])
+
+      assert_all_close(
+        NxSignal.Filters.firwin(7, 0.4, window: :rectangular),
+        expected,
+        atol: 1.0e-5
+      )
+    end
+
+    test "scale: false returns unscaled coefficients" do
+      expected =
+        Nx.tensor([
+          0.012109227658250522,
+          0.13905977799613067,
+          0.3,
+          0.13905977799613067,
+          0.012109227658250522
+        ])
+
+      assert_all_close(
+        NxSignal.Filters.firwin(5, 0.3, scale: false),
+        expected,
+        atol: 1.0e-5
+      )
+    end
+
+    test "cutoff normalised by sampling_rate" do
+      expected =
+        Nx.tensor([
+          0.024553834015016568,
+          0.23438946423798604,
+          0.48211340349399473,
+          0.23438946423798604,
+          0.024553834015016568
+        ])
+
+      assert_all_close(
+        NxSignal.Filters.firwin(5, 1000, sampling_rate: 8000),
+        expected,
+        atol: 1.0e-5
+      )
+    end
+
+    test "raises when cutoff is at or above Nyquist" do
+      assert_raise ArgumentError, ~r/cutoff must be strictly between 0 and Nyquist/, fn ->
+        NxSignal.Filters.firwin(5, 1.0)
+      end
+
+      assert_raise ArgumentError, ~r/cutoff must be strictly between 0 and Nyquist/, fn ->
+        NxSignal.Filters.firwin(5, 0.0)
+      end
+    end
+
+    test "raises when even num_taps would produce gain at Nyquist" do
+      assert_raise ArgumentError, ~r/odd number of taps/, fn ->
+        NxSignal.Filters.firwin(6, 0.4, pass_zero: false)
+      end
+    end
+
+    test "raises for unknown window" do
+      assert_raise ArgumentError, ~r/unknown window/, fn ->
+        NxSignal.Filters.firwin(5, 0.3, window: :bogus)
+      end
+    end
+  end
 end
