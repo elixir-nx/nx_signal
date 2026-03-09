@@ -38,7 +38,7 @@ slice = (signal_length - 3000)..(signal_length - 2750)
 plot_data = %{y: Nx.to_flat_list(data[[slice]]), x: Nx.to_flat_list(t[[slice]])}
 ```
 
-<!-- livebook:{"attrs":{"chart_title":"Signal sample","height":400,"layers":[{"chart_type":"line","color_field":null,"color_field_aggregate":null,"color_field_bin":false,"color_field_scale_scheme":null,"color_field_type":null,"data_variable":"plot_data","x_field":"x","x_field_aggregate":null,"x_field_bin":false,"x_field_scale_type":null,"x_field_type":"quantitative","y_field":"y","y_field_aggregate":null,"y_field_bin":false,"y_field_scale_type":null,"y_field_type":"quantitative"}],"vl_alias":"Elixir.VegaLite","width":600},"chunks":null,"kind":"Elixir.KinoVegaLite.ChartCell","livebook_object":"smart_cell"} -->
+<!-- livebook:{"attrs":"eyJjaGFydF90aXRsZSI6IlNpZ25hbCBzYW1wbGUiLCJoZWlnaHQiOjQwMCwibGF5ZXJzIjpbeyJhY3RpdmUiOnRydWUsImNoYXJ0X3R5cGUiOiJsaW5lIiwiY29sb3JfZmllbGQiOm51bGwsImNvbG9yX2ZpZWxkX2FnZ3JlZ2F0ZSI6bnVsbCwiY29sb3JfZmllbGRfYmluIjpmYWxzZSwiY29sb3JfZmllbGRfc2NhbGVfc2NoZW1lIjpudWxsLCJjb2xvcl9maWVsZF90eXBlIjpudWxsLCJkYXRhX3ZhcmlhYmxlIjoicGxvdF9kYXRhIiwiZ2VvZGF0YV9jb2xvciI6ImJsdWUiLCJsYXRpdHVkZV9maWVsZCI6bnVsbCwibG9uZ2l0dWRlX2ZpZWxkIjpudWxsLCJ4X2ZpZWxkIjoieCIsInhfZmllbGRfYWdncmVnYXRlIjpudWxsLCJ4X2ZpZWxkX2JpbiI6ZmFsc2UsInhfZmllbGRfc2NhbGVfdHlwZSI6bnVsbCwieF9maWVsZF90eXBlIjoicXVhbnRpdGF0aXZlIiwieV9maWVsZCI6InkiLCJ5X2ZpZWxkX2FnZ3JlZ2F0ZSI6bnVsbCwieV9maWVsZF9iaW4iOmZhbHNlLCJ5X2ZpZWxkX3NjYWxlX3R5cGUiOm51bGwsInlfZmllbGRfdHlwZSI6InF1YW50aXRhdGl2ZSJ9XSwidmxfYWxpYXMiOiJFbGl4aXIuVmVnYUxpdGUiLCJ3aWR0aCI6NjAwfQ","chunks":null,"kind":"Elixir.KinoVegaLite.ChartCell","livebook_object":"smart_cell"} -->
 
 ```elixir
 VegaLite.new(width: 600, height: 400, title: "Signal sample")
@@ -51,18 +51,14 @@ VegaLite.new(width: 600, height: 400, title: "Signal sample")
 ## Preparing the Filter
 
 ```elixir
-# The filter used is a simple ideal filter specified through sinc
-
 # Cutoff frequency in Hz
 fc = 600
-filter_indices = Nx.iota({window_length}) |> Nx.subtract(div(window_length, 2))
 
-h_ideal =
-  Nx.multiply(2 * fc / fs, NxSignal.Filters.sinc(Nx.multiply(2 * fc / fs, filter_indices)))
+# Design the FIR filter coefficients using the window method
+h = NxSignal.Filters.firwin(window_length, fc, sampling_rate: fs, window: :hann)
 
-window = NxSignal.Windows.hann(n: window_length)
-
-h = Nx.multiply(h_ideal, window)
+# Separate periodic Hann window for STFT analysis
+stft_window = NxSignal.Windows.hann(window_length)
 
 hfft =
   h
@@ -94,7 +90,7 @@ plot_data = %{
 }
 ```
 
-<!-- livebook:{"attrs":{"chart_title":"600 Hz Low-Pass filter (Hann window); L = 2048","height":400,"layers":[{"chart_type":"line","color_field":null,"color_field_aggregate":null,"color_field_bin":false,"color_field_scale_scheme":null,"color_field_type":null,"data_variable":"plot_data","x_field":"n","x_field_aggregate":null,"x_field_bin":false,"x_field_scale_type":null,"x_field_type":"quantitative","y_field":"h","y_field_aggregate":null,"y_field_bin":false,"y_field_scale_type":null,"y_field_type":"quantitative"}],"vl_alias":"Elixir.VegaLite","width":600},"chunks":null,"kind":"Elixir.KinoVegaLite.ChartCell","livebook_object":"smart_cell"} -->
+<!-- livebook:{"attrs":"eyJjaGFydF90aXRsZSI6IjYwMCBIeiBMb3ctUGFzcyBmaWx0ZXIgKEhhbm4gd2luZG93KTsgTCA9IDIwNDgiLCJoZWlnaHQiOjQwMCwibGF5ZXJzIjpbeyJhY3RpdmUiOnRydWUsImNoYXJ0X3R5cGUiOiJsaW5lIiwiY29sb3JfZmllbGQiOm51bGwsImNvbG9yX2ZpZWxkX2FnZ3JlZ2F0ZSI6bnVsbCwiY29sb3JfZmllbGRfYmluIjpmYWxzZSwiY29sb3JfZmllbGRfc2NhbGVfc2NoZW1lIjpudWxsLCJjb2xvcl9maWVsZF90eXBlIjpudWxsLCJkYXRhX3ZhcmlhYmxlIjoicGxvdF9kYXRhIiwiZ2VvZGF0YV9jb2xvciI6ImJsdWUiLCJsYXRpdHVkZV9maWVsZCI6bnVsbCwibG9uZ2l0dWRlX2ZpZWxkIjpudWxsLCJ4X2ZpZWxkIjoibiIsInhfZmllbGRfYWdncmVnYXRlIjpudWxsLCJ4X2ZpZWxkX2JpbiI6ZmFsc2UsInhfZmllbGRfc2NhbGVfdHlwZSI6bnVsbCwieF9maWVsZF90eXBlIjoicXVhbnRpdGF0aXZlIiwieV9maWVsZCI6ImgiLCJ5X2ZpZWxkX2FnZ3JlZ2F0ZSI6bnVsbCwieV9maWVsZF9iaW4iOmZhbHNlLCJ5X2ZpZWxkX3NjYWxlX3R5cGUiOm51bGwsInlfZmllbGRfdHlwZSI6InF1YW50aXRhdGl2ZSJ9XSwidmxfYWxpYXMiOiJFbGl4aXIuVmVnYUxpdGUiLCJ3aWR0aCI6NjAwfQ","chunks":null,"kind":"Elixir.KinoVegaLite.ChartCell","livebook_object":"smart_cell"} -->
 
 ```elixir
 VegaLite.new(
@@ -108,13 +104,13 @@ VegaLite.new(
 |> VegaLite.encode_field(:y, "h", type: :quantitative)
 ```
 
-<!-- livebook:{"attrs":{"chart_title":"FFT - 1200 Hz Low-Pass filter (Hann window); L = 1764","height":400,"layers":[{"chart_type":"line","color_field":null,"color_field_aggregate":null,"color_field_bin":false,"color_field_scale_scheme":null,"color_field_type":null,"data_variable":"plot_data","x_field":"f","x_field_aggregate":null,"x_field_bin":false,"x_field_scale_type":null,"x_field_type":"quantitative","y_field":"hfft","y_field_aggregate":null,"y_field_bin":false,"y_field_scale_type":null,"y_field_type":"quantitative"}],"vl_alias":"Elixir.VegaLite","width":600},"chunks":null,"kind":"Elixir.KinoVegaLite.ChartCell","livebook_object":"smart_cell"} -->
+<!-- livebook:{"attrs":"eyJjaGFydF90aXRsZSI6IkZGVCAtIDYwMCBIeiBMb3ctUGFzcyBmaWx0ZXIgKEhhbm4gd2luZG93KTsgTCA9IDIwNDgiLCJoZWlnaHQiOjQwMCwibGF5ZXJzIjpbeyJhY3RpdmUiOnRydWUsImNoYXJ0X3R5cGUiOiJsaW5lIiwiY29sb3JfZmllbGQiOm51bGwsImNvbG9yX2ZpZWxkX2FnZ3JlZ2F0ZSI6bnVsbCwiY29sb3JfZmllbGRfYmluIjpmYWxzZSwiY29sb3JfZmllbGRfc2NhbGVfc2NoZW1lIjpudWxsLCJjb2xvcl9maWVsZF90eXBlIjpudWxsLCJkYXRhX3ZhcmlhYmxlIjoicGxvdF9kYXRhIiwiZ2VvZGF0YV9jb2xvciI6ImJsdWUiLCJsYXRpdHVkZV9maWVsZCI6bnVsbCwibG9uZ2l0dWRlX2ZpZWxkIjpudWxsLCJ4X2ZpZWxkIjoiZiIsInhfZmllbGRfYWdncmVnYXRlIjpudWxsLCJ4X2ZpZWxkX2JpbiI6ZmFsc2UsInhfZmllbGRfc2NhbGVfdHlwZSI6bnVsbCwieF9maWVsZF90eXBlIjoicXVhbnRpdGF0aXZlIiwieV9maWVsZCI6ImhmZnQiLCJ5X2ZpZWxkX2FnZ3JlZ2F0ZSI6bnVsbCwieV9maWVsZF9iaW4iOmZhbHNlLCJ5X2ZpZWxkX3NjYWxlX3R5cGUiOm51bGwsInlfZmllbGRfdHlwZSI6InF1YW50aXRhdGl2ZSJ9XSwidmxfYWxpYXMiOiJFbGl4aXIuVmVnYUxpdGUiLCJ3aWR0aCI6NjAwfQ","chunks":null,"kind":"Elixir.KinoVegaLite.ChartCell","livebook_object":"smart_cell"} -->
 
 ```elixir
 VegaLite.new(
   width: 600,
   height: 400,
-  title: "FFT - 1200 Hz Low-Pass filter (Hann window); L = 1764"
+  title: "FFT - 600 Hz Low-Pass filter (Hann window); L = 2048"
 )
 |> VegaLite.data_from_values(plot_data, only: ["f", "hfft"])
 |> VegaLite.mark(:line)
@@ -122,15 +118,24 @@ VegaLite.new(
 |> VegaLite.encode_field(:y, "hfft", type: :quantitative)
 ```
 
+## Direct Convolution
+
+The simplest way to apply the FIR filter is to convolve the signal directly with the coefficients in the time domain.
+
+```elixir
+data_filtered =
+  NxSignal.Convolution.convolve(data, h, mode: :same, method: :fft)
+  |> Nx.as_type(data.type)
+```
+
 ## Filtering the data
 
 ```elixir
-# Now that we have our filter, instead of convolving the filter
-# with the time representation of the signal, we can multiply each
-# STFT frame by the DFT of the filter (represented by hfft)
+# Alternatively, we can multiply each STFT frame by the DFT of the
+# filter (represented by hfft) to apply it in the frequency domain.
 
 {z, t, f} =
-  NxSignal.stft(data, window, fft_length: window_length, sampling_rate: fs, scaling: :spectrum)
+  NxSignal.stft(data, stft_window, fft_length: window_length, sampling_rate: fs, scaling: :spectrum)
 ```
 
 ```elixir
@@ -150,7 +155,7 @@ filtered_spectrogram =
 # Reconstruct the time signal
 data_out =
   z_filtered
-  |> NxSignal.istft(window, fft_length: window_length, scaling: :spectrum, sampling_rate: fs)
+  |> NxSignal.istft(stft_window, fft_length: window_length, scaling: :spectrum, sampling_rate: fs)
   |> Nx.as_type(data.type)
 ```
 
@@ -220,7 +225,7 @@ plot_data = %{
 }
 ```
 
-<!-- livebook:{"attrs":{"chart_title":"Reconstructed Signal","height":400,"layers":[{"chart_type":"line","color_field":null,"color_field_aggregate":null,"color_field_bin":false,"color_field_scale_scheme":null,"color_field_type":null,"data_variable":"plot_data","x_field":"x","x_field_aggregate":null,"x_field_bin":false,"x_field_scale_type":null,"x_field_type":"quantitative","y_field":"y","y_field_aggregate":null,"y_field_bin":false,"y_field_scale_type":null,"y_field_type":"quantitative"}],"vl_alias":"Elixir.VegaLite","width":600},"chunks":null,"kind":"Elixir.KinoVegaLite.ChartCell","livebook_object":"smart_cell"} -->
+<!-- livebook:{"attrs":"eyJjaGFydF90aXRsZSI6IlJlY29uc3RydWN0ZWQgU2lnbmFsIiwiaGVpZ2h0Ijo0MDAsImxheWVycyI6W3siYWN0aXZlIjp0cnVlLCJjaGFydF90eXBlIjoibGluZSIsImNvbG9yX2ZpZWxkIjpudWxsLCJjb2xvcl9maWVsZF9hZ2dyZWdhdGUiOm51bGwsImNvbG9yX2ZpZWxkX2JpbiI6ZmFsc2UsImNvbG9yX2ZpZWxkX3NjYWxlX3NjaGVtZSI6bnVsbCwiY29sb3JfZmllbGRfdHlwZSI6bnVsbCwiZGF0YV92YXJpYWJsZSI6InBsb3RfZGF0YSIsImdlb2RhdGFfY29sb3IiOiJibHVlIiwibGF0aXR1ZGVfZmllbGQiOm51bGwsImxvbmdpdHVkZV9maWVsZCI6bnVsbCwieF9maWVsZCI6IngiLCJ4X2ZpZWxkX2FnZ3JlZ2F0ZSI6bnVsbCwieF9maWVsZF9iaW4iOmZhbHNlLCJ4X2ZpZWxkX3NjYWxlX3R5cGUiOm51bGwsInhfZmllbGRfdHlwZSI6InF1YW50aXRhdGl2ZSIsInlfZmllbGQiOiJ5IiwieV9maWVsZF9hZ2dyZWdhdGUiOm51bGwsInlfZmllbGRfYmluIjpmYWxzZSwieV9maWVsZF9zY2FsZV90eXBlIjpudWxsLCJ5X2ZpZWxkX3R5cGUiOiJxdWFudGl0YXRpdmUifV0sInZsX2FsaWFzIjoiRWxpeGlyLlZlZ2FMaXRlIiwid2lkdGgiOjYwMH0","chunks":null,"kind":"Elixir.KinoVegaLite.ChartCell","livebook_object":"smart_cell"} -->
 
 ```elixir
 VegaLite.new(width: 600, height: 400, title: "Reconstructed Signal")

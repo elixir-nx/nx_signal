@@ -109,6 +109,175 @@ defmodule NxSignal.Filters do
     |> Nx.as_type(Nx.type(t))
   end
 
+  @doc """
+  FIR filter design using the window method.
+
+  Computes the coefficients of a finite impulse response (FIR) filter.
+  The filter has linear phase (Type I for odd `num_taps`, Type II for even).
+  Type II filters have a zero at Nyquist, so a filter requiring gain there
+  must use an odd number of taps.
+
+  ## Arguments
+
+    * `num_taps` - number of filter coefficients (filter order + 1).
+    * `cutoff` - list of cutoff frequencies in the same units as `sampling_rate`.
+
+  ## Options
+
+    * `:window` - window function to apply. One of `:hamming`, `:hann`,
+      `:blackman`, `:bartlett`, `:rectangular`, or `{:kaiser, beta}`.
+      Defaults to `:hamming`.
+    * `:pass_zero` - if `true`, the DC gain is 1 (lowpass or bandstop);
+      if `false`, the DC gain is 0 (highpass or bandpass). Defaults to `true`.
+    * `:scale` - if `true`, normalise the coefficients so the frequency
+      response is exactly 1 at a reference frequency. Defaults to `true`.
+    * `:sampling_rate` - the sampling rate in Hz; `cutoff` is given in the
+      same units. Defaults to `2.0` so cutoffs are already normalised to
+      `[0, 1]` where `1` equals Nyquist.
+    * `:type` - output tensor type. Defaults to `{:f, 32}`.
+
+  ## Examples
+
+      iex> coeffs = NxSignal.Filters.firwin(5, [0.3], window: :hamming, sampling_rate: 2.0)
+      iex> Nx.shape(coeffs)
+      {5}
+
+  """
+  @doc type: :filters
+  deftransform firwin(num_taps, cutoff, opts \\ []) do
+    opts =
+      Keyword.validate!(opts,
+        window: :hamming,
+        pass_zero: true,
+        scale: true,
+        sampling_rate: 2.0,
+        type: {:f, 32}
+      )
+
+    type = opts[:type]
+    nyq = opts[:sampling_rate] / 2.0
+
+    if not is_list(cutoff) do
+      raise ArgumentError, "cutoff must be a list of frequencies, got: #{inspect(cutoff)}"
+    end
+
+    cutoff_list = cutoff |> Enum.map(&(&1 / nyq)) |> Enum.sort()
+
+    # Validate cutoffs are strictly in (0, 1) — after sorting, only the extremes need checking
+    first_cutoff = List.first(cutoff_list)
+    last_cutoff = List.last(cutoff_list)
+
+    if first_cutoff <= 0.0 do
+      raise ArgumentError,
+            "cutoff must be strictly between 0 and Nyquist (exclusive), got: #{first_cutoff * nyq}"
+    end
+
+    if last_cutoff >= 1.0 do
+      raise ArgumentError,
+            "cutoff must be strictly between 0 and Nyquist (exclusive), got: #{last_cutoff * nyq}"
+    end
+
+    # Type II filters (even num_taps) have a zero at Nyquist.
+    # Any filter requiring gain there must use an odd number of taps.
+    n_cuts = length(cutoff_list)
+    even_n_cuts = rem(n_cuts, 2) == 0
+
+    nyquist_gain =
+      (opts[:pass_zero] and even_n_cuts) or
+        (not opts[:pass_zero] and not even_n_cuts)
+
+    if nyquist_gain and rem(num_taps, 2) == 0 do
+      raise ArgumentError,
+            "a filter with non-zero gain at Nyquist (e.g. highpass) requires " <>
+              "an odd number of taps, got: #{num_taps}"
+    end
+
+    m = (num_taps - 1) / 2.0
+    alpha = Nx.subtract(Nx.iota({num_taps}, type: type), m)
+
+    # Build ideal impulse response by summing contributions from each passband.
+    # Passband pairs are selected at compile time from [0, c1, c2, ..., cn, 1].
+    all_freqs = [0.0 | cutoff_list] ++ [1.0]
+
+    h =
+      all_freqs
+      |> Enum.chunk_every(2, 1, :discard)
+      |> Enum.with_index()
+      |> Enum.filter(fn {_pair, i} ->
+        if opts[:pass_zero], do: rem(i, 2) == 0, else: rem(i, 2) == 1
+      end)
+      |> Enum.reduce(Nx.broadcast(Nx.tensor(0.0, type: type), {num_taps}), fn {[a, b], _i}, acc ->
+        firwin_contribution(a, b, alpha, acc)
+      end)
+
+    w = firwin_build_window(num_taps, opts[:window], type)
+    h = Nx.multiply(h, w)
+
+    if opts[:scale] do
+      firwin_scale(h, alpha, cutoff_list, opts[:pass_zero])
+    else
+      h
+    end
+  end
+
+  defnp firwin_contribution(a, b, alpha, acc) do
+    contribution_a = a * NxSignal.Waveforms.sinc(a * alpha)
+    contribution_b = b * NxSignal.Waveforms.sinc(b * alpha)
+    acc + contribution_b - contribution_a
+  end
+
+  deftransformp firwin_scale(h, alpha, cutoff_list, pass_zero) do
+    scale_freq =
+      cond do
+        pass_zero ->
+          0.0
+
+        match?([_], cutoff_list) ->
+          1.0
+
+        true ->
+          [first, second | _] = cutoff_list
+          (first + second) / 2.0
+      end
+
+    scale_factor =
+      Nx.abs(
+        Nx.dot(
+          h,
+          Nx.cos(Nx.multiply(alpha, :math.pi() * scale_freq))
+        )
+      )
+
+    Nx.divide(h, scale_factor)
+  end
+
+  deftransformp firwin_build_window(num_taps, window, type) do
+    case window do
+      :hamming ->
+        NxSignal.Windows.hamming(num_taps, is_periodic: false, type: type)
+
+      :hann ->
+        NxSignal.Windows.hann(num_taps, is_periodic: false, type: type)
+
+      :blackman ->
+        NxSignal.Windows.blackman(num_taps, is_periodic: false, type: type)
+
+      :bartlett ->
+        NxSignal.Windows.bartlett(num_taps, type: type)
+
+      :rectangular ->
+        NxSignal.Windows.rectangular(num_taps, type: type)
+
+      {:kaiser, beta} ->
+        NxSignal.Windows.kaiser(num_taps, beta: beta, is_periodic: false, type: type)
+
+      _ ->
+        raise ArgumentError,
+              "unknown window #{inspect(window)}, supported: " <>
+                ":hamming, :hann, :blackman, :bartlett, :rectangular, {:kaiser, beta}"
+    end
+  end
+
   defnp wiener_n(t, kernel, noise, opts) do
     size = opts[:size]
 
