@@ -246,7 +246,7 @@ defmodule NxSignal.Convolution do
     iex> NxSignal.Convolution.fftconvolve(Nx.tensor([1,2,3]), Nx.tensor([3,4,5]))
     #Nx.Tensor<
       f32[5]
-      [3.0000007152557373, 10.0, 22.0, 22.0, 15.0]
+      [3.0000007, 10.0, 22.0, 22.0, 15.0]
     >
   """
   deftransform fftconvolve(in1, in2, opts \\ []) do
