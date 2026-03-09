@@ -255,7 +255,7 @@ defmodule NxSignal.FiltersTest do
           0.020103708268285354
         ])
 
-      assert_all_close(NxSignal.Filters.firwin(5, 0.3), expected, atol: 1.0e-5)
+      assert_all_close(NxSignal.Filters.firwin(5, [0.3]), expected, atol: 1.0e-5)
     end
 
     test "highpass with hamming window" do
@@ -271,7 +271,7 @@ defmodule NxSignal.FiltersTest do
         ])
 
       assert_all_close(
-        NxSignal.Filters.firwin(7, 0.4, pass_zero: false),
+        NxSignal.Filters.firwin(7, [0.4], pass_zero: false),
         expected,
         atol: 1.0e-5
       )
@@ -334,7 +334,7 @@ defmodule NxSignal.FiltersTest do
         ])
 
       assert_all_close(
-        NxSignal.Filters.firwin(7, 0.5, window: {:kaiser, 5.0}),
+        NxSignal.Filters.firwin(7, [0.5], window: {:kaiser, 5.0}),
         expected,
         atol: 1.0e-3
       )
@@ -353,7 +353,7 @@ defmodule NxSignal.FiltersTest do
         ])
 
       assert_all_close(
-        NxSignal.Filters.firwin(7, 0.4, window: :rectangular),
+        NxSignal.Filters.firwin(7, [0.4], window: :rectangular),
         expected,
         atol: 1.0e-5
       )
@@ -370,7 +370,7 @@ defmodule NxSignal.FiltersTest do
         ])
 
       assert_all_close(
-        NxSignal.Filters.firwin(5, 0.3, scale: false),
+        NxSignal.Filters.firwin(5, [0.3], scale: false),
         expected,
         atol: 1.0e-5
       )
@@ -387,7 +387,7 @@ defmodule NxSignal.FiltersTest do
         ])
 
       assert_all_close(
-        NxSignal.Filters.firwin(5, 1000, sampling_rate: 8000),
+        NxSignal.Filters.firwin(5, [1000], sampling_rate: 8000),
         expected,
         atol: 1.0e-5
       )
@@ -395,23 +395,23 @@ defmodule NxSignal.FiltersTest do
 
     test "raises when cutoff is at or above Nyquist" do
       assert_raise ArgumentError, ~r/cutoff must be strictly between 0 and Nyquist/, fn ->
-        NxSignal.Filters.firwin(5, 1.0)
+        NxSignal.Filters.firwin(5, [1.0])
       end
 
       assert_raise ArgumentError, ~r/cutoff must be strictly between 0 and Nyquist/, fn ->
-        NxSignal.Filters.firwin(5, 0.0)
+        NxSignal.Filters.firwin(5, [0.0])
       end
     end
 
     test "raises when even num_taps would produce gain at Nyquist" do
       assert_raise ArgumentError, ~r/odd number of taps/, fn ->
-        NxSignal.Filters.firwin(6, 0.4, pass_zero: false)
+        NxSignal.Filters.firwin(6, [0.4], pass_zero: false)
       end
     end
 
     test "raises for unknown window" do
       assert_raise ArgumentError, ~r/unknown window/, fn ->
-        NxSignal.Filters.firwin(5, 0.3, window: :bogus)
+        NxSignal.Filters.firwin(5, [0.3], window: :bogus)
       end
     end
   end

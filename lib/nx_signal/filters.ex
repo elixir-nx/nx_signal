@@ -120,8 +120,7 @@ defmodule NxSignal.Filters do
   ## Arguments
 
     * `num_taps` - number of filter coefficients (filter order + 1).
-    * `cutoff` - cutoff frequency or list of cutoff frequencies in the same
-      units as `sampling_rate`.
+    * `cutoff` - list of cutoff frequencies in the same units as `sampling_rate`.
 
   ## Options
 
@@ -139,7 +138,7 @@ defmodule NxSignal.Filters do
 
   ## Examples
 
-      iex> coeffs = NxSignal.Filters.firwin(5, 0.3, window: :hamming, sampling_rate: 2.0)
+      iex> coeffs = NxSignal.Filters.firwin(5, [0.3], window: :hamming, sampling_rate: 2.0)
       iex> Nx.shape(coeffs)
       {5}
 
@@ -157,23 +156,34 @@ defmodule NxSignal.Filters do
 
     type = opts[:type]
     nyq = opts[:sampling_rate] / 2.0
-    cutoff_list = cutoff |> List.wrap() |> Enum.map(&(&1 / nyq))
+    if not is_list(cutoff) do
+      raise ArgumentError, "cutoff must be a list of frequencies, got: #{inspect(cutoff)}"
+    end
 
-    # Validate cutoffs are strictly in (0, 1)
-    Enum.each(cutoff_list, fn fc ->
-      if fc <= 0.0 or fc >= 1.0 do
-        raise ArgumentError,
-              "cutoff must be strictly between 0 and Nyquist (exclusive), got: #{fc * nyq}"
-      end
-    end)
+    cutoff_list = cutoff |> Enum.map(&(&1 / nyq)) |> Enum.sort()
+
+    # Validate cutoffs are strictly in (0, 1) — after sorting, only the extremes need checking
+    first_cutoff = List.first(cutoff_list)
+    last_cutoff = List.last(cutoff_list)
+
+    if first_cutoff <= 0.0 do
+      raise ArgumentError,
+            "cutoff must be strictly between 0 and Nyquist (exclusive), got: #{first_cutoff * nyq}"
+    end
+
+    if last_cutoff >= 1.0 do
+      raise ArgumentError,
+            "cutoff must be strictly between 0 and Nyquist (exclusive), got: #{last_cutoff * nyq}"
+    end
 
     # Type II filters (even num_taps) have a zero at Nyquist.
     # Any filter requiring gain there must use an odd number of taps.
     n_cuts = length(cutoff_list)
+    even_n_cuts = rem(n_cuts, 2) == 0
 
     nyquist_gain =
-      (opts[:pass_zero] and rem(n_cuts, 2) == 0) or
-        (not opts[:pass_zero] and rem(n_cuts, 2) == 1)
+      (opts[:pass_zero] and even_n_cuts) or
+        (not opts[:pass_zero] and not even_n_cuts)
 
     if nyquist_gain and rem(num_taps, 2) == 0 do
       raise ArgumentError,
@@ -196,41 +206,44 @@ defmodule NxSignal.Filters do
         if opts[:pass_zero], do: rem(i, 2) == 0, else: rem(i, 2) == 1
       end)
       |> Enum.reduce(Nx.broadcast(Nx.tensor(0.0, type: type), {num_taps}), fn {[a, b], _i}, acc ->
-        contribution =
-          Nx.subtract(
-            Nx.multiply(b, NxSignal.Waveforms.sinc(Nx.multiply(b, alpha))),
-            Nx.multiply(a, NxSignal.Waveforms.sinc(Nx.multiply(a, alpha)))
-          )
-
-        Nx.add(acc, contribution)
+        firwin_contribution(a, b, alpha, acc)
       end)
 
     w = firwin_build_window(num_taps, opts[:window], type)
     h = Nx.multiply(h, w)
 
     if opts[:scale] do
-      scale_freq = firwin_scale_freq(cutoff_list, opts[:pass_zero])
-
-      scale_factor =
-        Nx.abs(
-          Nx.dot(
-            h,
-            Nx.cos(Nx.multiply(alpha, :math.pi() * scale_freq))
-          )
-        )
-
-      Nx.divide(h, scale_factor)
+      firwin_scale(h, alpha, cutoff_list, opts[:pass_zero])
     else
       h
     end
   end
 
-  deftransformp firwin_scale_freq(cutoff_list, pass_zero) do
-    cond do
-      pass_zero -> 0.0
-      length(cutoff_list) == 1 -> 1.0
-      true -> (List.first(cutoff_list) + Enum.at(cutoff_list, 1)) / 2.0
-    end
+  defnp firwin_contribution(a, b, alpha, acc) do
+    contribution_a = a * NxSignal.Waveforms.sinc(a * alpha)
+    contribution_b = b * NxSignal.Waveforms.sinc(b * alpha)
+    acc + contribution_b - contribution_a
+  end
+
+  deftransformp firwin_scale(h, alpha, cutoff_list, pass_zero) do
+    scale_freq =
+      cond do
+        pass_zero -> 0.0
+        match?([_], cutoff_list) -> 1.0
+        true ->
+          [first, second | _] = cutoff_list
+          (first + second) / 2.0
+      end
+
+    scale_factor =
+      Nx.abs(
+        Nx.dot(
+          h,
+          Nx.cos(Nx.multiply(alpha, :math.pi() * scale_freq))
+        )
+      )
+
+    Nx.divide(h, scale_factor)
   end
 
   deftransformp firwin_build_window(num_taps, window, type) do
