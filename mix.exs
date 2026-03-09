@@ -2,7 +2,7 @@ defmodule NxSignal.MixProject do
   use Mix.Project
 
   @source_url "https://github.com/elixir-nx/nx_signal"
-  @version "0.2.0"
+  @version "0.3.0"
 
   def project do
     [
@@ -57,7 +57,7 @@ defmodule NxSignal.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:nx, github: "elixir-nx/nx", sparse: "nx"},
+      {:nx, "~> 0.11"},
       {:ex_doc, "~> 0.29", only: :docs}
     ]
   end
