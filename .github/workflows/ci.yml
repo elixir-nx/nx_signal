@@ -11,8 +11,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        elixir: ["1.18.0"]
-        otp: ["27.0"]
+        elixir: ["1.18.4"]
+        otp: ["27.3"]
     env:
       MIX_ENV: test
     steps:
@@ -35,15 +35,15 @@ jobs:
       - name: Check formatting
         run: mix format --check-formatted
       - name: Run tests
-        run: mix test
+        run: mix test --warnings-as-errors
   win:
     name: Windows
-    runs-on: windows-latest
+    runs-on: windows-2022
     strategy:
       fail-fast: false
       matrix:
-        elixir: ["1.18.0"]
-        otp: ["27.0"]
+        elixir: ["1.18.4"]
+        otp: ["27.3"]
     env:
       MIX_ENV: test
     steps:
@@ -70,4 +70,4 @@ jobs:
       - name: Check formatting
         run: mix format --check-formatted
       - name: Run tests
-        run: mix test
+        run: mix test --warnings-as-errors
