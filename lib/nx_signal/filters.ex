@@ -156,6 +156,7 @@ defmodule NxSignal.Filters do
 
     type = opts[:type]
     nyq = opts[:sampling_rate] / 2.0
+
     if not is_list(cutoff) do
       raise ArgumentError, "cutoff must be a list of frequencies, got: #{inspect(cutoff)}"
     end
@@ -228,8 +229,12 @@ defmodule NxSignal.Filters do
   deftransformp firwin_scale(h, alpha, cutoff_list, pass_zero) do
     scale_freq =
       cond do
-        pass_zero -> 0.0
-        match?([_], cutoff_list) -> 1.0
+        pass_zero ->
+          0.0
+
+        match?([_], cutoff_list) ->
+          1.0
+
         true ->
           [first, second | _] = cutoff_list
           (first + second) / 2.0
