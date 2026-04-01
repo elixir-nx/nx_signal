@@ -1,5 +1,7 @@
 # NxSignal
 
+[![Package](https://img.shields.io/badge/-Package-important)](https://hex.pm/packages/nx_signal) [![Documentation](https://img.shields.io/badge/-Documentation-blueviolet)](https://hexdocs.pm/nx_signal)
+
 DSP (Digital Signal Processing) with [Nx](https://github.com/elixir-nx/nx)
 
 ## Why NxSignal?
@@ -17,7 +19,7 @@ to your Mix project:
 ```elixir
 def deps do
   [
-    {:nx_signal, "~> 0.1"}
+    {:nx_signal, "~> 0.3"}
   ]
 end
 ```
@@ -26,7 +28,7 @@ You can also use `Mix.install` for standalone development:
 
 ```elixir
 Mix.install([
-  {:nx_signal, "~> 0.1"}
+  {:nx_signal, "~> 0.3"}
 ])
 ```
 
@@ -38,7 +40,7 @@ box with different backends and compilers.
 
 ## Guides (Livebook)
 
-Check out the "guides" directory in the repository for examples. 
+Check out the "guides" directory in the repository for examples.
 
 ## Contributing
 
