@@ -801,13 +801,25 @@ defmodule NxSignal do
 
     result =
       if other_axes == [] do
-        czt_n(x_t, w, a, m: m, n: n, fft_len: fft_len, complex_type: complex_type, real_type: real_type)
+        czt_n(x_t, w, a,
+          m: m,
+          n: n,
+          fft_len: fft_len,
+          complex_type: complex_type,
+          real_type: real_type
+        )
       else
         batch_names = Enum.map(0..(length(other_axes) - 1), fn i -> :"batch_#{i}" end)
         x_v = Nx.vectorize(x_t, batch_names)
 
         result_v =
-          czt_n(x_v, w, a, m: m, n: n, fft_len: fft_len, complex_type: complex_type, real_type: real_type)
+          czt_n(x_v, w, a,
+            m: m,
+            n: n,
+            fft_len: fft_len,
+            complex_type: complex_type,
+            real_type: real_type
+          )
 
         Nx.devectorize(result_v, keep_names: false)
       end
