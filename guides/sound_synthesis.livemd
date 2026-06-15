@@ -1,0 +1,447 @@
+# Sound Synthesis with NxSignal
+
+```elixir
+Mix.install([
+  {:nx_signal, path: __DIR__ |> Path.join("..") |> Path.expand()},
+  {:kino, "~> 0.13"},
+  {:kino_vega_lite, "~> 0.1"},
+  {:tucan, "~> 0.5"}
+])
+```
+
+## Audio helper
+
+This module converts a 1-D f32 Nx tensor of normalised PCM samples
+(values in $[-1, 1]$) into a WAV binary that `Kino.Audio` can play directly
+in the browser.
+
+```elixir
+defmodule Audio do
+  @moduledoc """
+  Utilities for rendering Nx tensors as playable audio in Livebook.
+  """
+
+  @doc """
+  Encode a 1-D f32 tensor as a 16-bit mono WAV binary.
+
+  ## Examples
+
+      Audio.play(signal, 44_100)
+  """
+  def to_wav(samples, sample_rate \\ 44_100) do
+    pcm =
+      samples
+      |> Nx.as_type(:f32)
+      |> Nx.clip(-1.0, 1.0)
+      |> Nx.multiply(32_767)
+      |> Nx.as_type({:s, 16})
+      |> Nx.to_binary()
+
+    data_size  = byte_size(pcm)
+    byte_rate  = sample_rate * 2
+    chunk_size = 36 + data_size
+
+    <<
+      "RIFF", chunk_size::little-32,
+      "WAVE",
+      "fmt ",  16::little-32,
+      1::little-16,           # PCM
+      1::little-16,           # mono
+      sample_rate::little-32,
+      byte_rate::little-32,
+      2::little-16,           # block align (1 channel × 2 bytes)
+      16::little-16,          # bits per sample
+      "data", data_size::little-32,
+      pcm::binary
+    >>
+  end
+
+  @doc "Render a tensor as an inline audio player."
+  def play(samples, sample_rate \\ 44_100, opts \\ []) do
+    samples |> to_wav(sample_rate) |> Kino.Audio.new(:wav, opts)
+  end
+
+  @doc "Normalise a tensor so its peak is at ±1."
+  def normalise(t) do
+    peak = t |> Nx.abs() |> Nx.reduce_max()
+    Nx.divide(t, Nx.max(peak, 1.0e-9))
+  end
+end
+```
+
+## Your first sound
+
+A 440 Hz sine wave: this is concert pitch A4.
+
+```elixir
+fs = 44_100
+t  = Nx.linspace(0, 1.0, n: fs, type: :f32)
+
+signal = Nx.sin(Nx.multiply(t, 2 * :math.pi() * 440))
+
+Audio.play(signal, fs)
+```
+
+## Waveform shapes
+
+The *shape* of a wave determines its timbre. Let's listen to three classic
+waveforms all tuned to the same pitch (220 Hz, A3) and compare their
+character.
+
+Sine waves are pure: they are just the fundamental frequency, no harmonics. This is why they sound a bit cold to the human ear. Square and sawtooth waves are rich in harmonics, which is why they sound buzzy or bright.
+
+```elixir
+fs  = 44_100
+dur = 0.8
+t   = Nx.linspace(0, dur, n: trunc(fs * dur), type: :f32)
+phi = Nx.multiply(t, 2 * :math.pi() * 220)
+
+sine     = Nx.sin(phi)
+square   = NxSignal.Waveforms.square(phi) |> Nx.as_type(:f32)
+sawtooth = NxSignal.Waveforms.sawtooth(phi)
+
+Kino.Layout.grid([
+  Kino.Layout.grid([Kino.Text.new("Sine"),     Audio.play(sine,     fs)], columns: 2),
+  Kino.Layout.grid([Kino.Text.new("Square"),   Audio.play(square,   fs)], columns: 2),
+  Kino.Layout.grid([Kino.Text.new("Sawtooth"), Audio.play(sawtooth, fs)], columns: 2)
+])
+```
+
+Showing the first two cycles (≈ 9 ms) makes the structural differences between
+the waveforms immediately visible.
+
+```elixir
+# 2 cycles at 220 Hz = 2/220 s ≈ 401 samples at 44 100 Hz
+n_show  = 401
+t_show  = t |> Nx.slice([0], [n_show]) |> Nx.to_flat_list()
+
+wave_data =
+  [{sine, "Sine"}, {square, "Square"}, {sawtooth, "Sawtooth"}]
+  |> Enum.flat_map(fn {wave, name} ->
+    wave
+    |> Nx.slice([0], [n_show])
+    |> Nx.to_flat_list()
+    |> Enum.zip(t_show)
+    |> Enum.map(fn {v, ti} -> %{time: ti, amplitude: v, waveform: name} end)
+  end)
+
+Tucan.lineplot(wave_data, "time", "amplitude")
+|> Tucan.color_by("waveform")
+|> Tucan.facet_by(:row, "waveform")
+|> Tucan.set_title("Waveform shapes: first 2 cycles at 220 Hz")
+|> Tucan.set_width(640)
+|> Tucan.set_height(80)
+```
+
+## Musical intervals and chords
+
+A musical interval is a ratio of frequencies. The octave is 2:1, a perfect
+fifth is 3:2, and a major third is 5:4. Stack them and you get a major chord.
+
+```elixir
+# Helper: generate a sine tone at frequency f for dur seconds
+tone = fn f, dur, fs ->
+  t = Nx.linspace(0, dur, n: trunc(fs * dur), type: :f32)
+  Nx.sin(Nx.multiply(t, 2 * :math.pi() * f))
+end
+
+fs  = 44_100
+dur = 1.5
+
+# C major chord: C4 (261.6 Hz), E4 (329.6 Hz), G4 (392.0 Hz)
+c = tone.(261.6, dur, fs)
+e = tone.(329.6, dur, fs)
+g = tone.(392.0, dur, fs)
+
+chord =
+  Nx.add(c, Nx.add(e, g))
+  |> Audio.normalise()
+
+Kino.Layout.grid([
+  Kino.Layout.grid([Kino.Text.new("C4"),        Audio.play(c,     fs)], columns: 2),
+  Kino.Layout.grid([Kino.Text.new("E4"),        Audio.play(e,     fs)], columns: 2),
+  Kino.Layout.grid([Kino.Text.new("G4"),        Audio.play(g,     fs)], columns: 2),
+  Kino.Layout.grid([Kino.Text.new("C major"),   Audio.play(chord, fs)], columns: 2)
+])
+```
+
+## Chirp sweep
+
+`NxSignal.Waveforms.chirp/5` generates a sinusoid whose instantaneous
+frequency sweeps continuously from `f0` to `f1` over the interval `[0, t1]`.
+This is the same mathematical structure used in radar and sonar pulses, and
+also in the bat echolocation clicks that inspired the name "chirp z-transform".
+
+```elixir
+fs  = 44_100
+dur = 3.0
+t   = Nx.linspace(0, dur, n: trunc(fs * dur), type: :f32)
+
+# Linear sweep: 80 Hz → 3 400 Hz over 3 seconds
+chirp_linear = NxSignal.Waveforms.chirp(t, 80, dur, 3400, method: :linear)
+
+# Logarithmic sweep: same range but exponential spacing —
+# sounds more even to the ear because pitch perception is logarithmic
+chirp_log = NxSignal.Waveforms.chirp(t, 80, dur, 3400, method: :logarithmic)
+
+Kino.Layout.grid([
+  Kino.Layout.grid([Kino.Text.new("Linear sweep"),      Audio.play(chirp_linear, fs)], columns: 2),
+  Kino.Layout.grid([Kino.Text.new("Logarithmic sweep"), Audio.play(chirp_log,    fs)], columns: 2)
+])
+```
+
+A spectrogram computed via `NxSignal.stft/3` makes the sweep visible: each
+column is the short-time power spectrum at that moment, so a rising tone
+appears as a diagonal line sweeping upwards.
+
+```elixir
+win_len = 2048
+
+{spectrum, times, freqs} =
+  NxSignal.stft(
+    chirp_linear,
+    NxSignal.Windows.hann(win_len, is_periodic: true),
+    sampling_rate: fs,
+    overlap_length: win_len - 512
+  )
+
+# Restrict to positive frequencies below 4 000 Hz
+max_bin = trunc(4000 / (fs / win_len)) + 1
+
+magnitude_db =
+  spectrum
+  |> Nx.slice_along_axis(0, max_bin, axis: 1)
+  |> Nx.abs()
+  |> Nx.log10()
+  |> Nx.multiply(20)
+
+{n_frames, n_bins} = Nx.shape(magnitude_db)
+
+# Scaling factors for axis label expressions
+hz_per_bin  = Float.round(fs / win_len, 2)
+times_list  = Nx.to_flat_list(times)
+s_per_frame = Float.round(
+  (List.last(times_list) - List.first(times_list)) / (n_frames - 1),
+  5
+)
+
+mag_list = Nx.to_flat_list(magnitude_db)
+
+# Integer frame/bin indices: VegaLite quantitative y-axis puts bin 0 (= 0 Hz)
+# at the bottom, giving the correct upward-sweeping diagonal.
+spec_data =
+  Enum.with_index(mag_list, fn val, idx ->
+    %{frame: div(idx, n_bins), bin: rem(idx, n_bins), power_db: val}
+  end)
+
+VegaLite.new(width: 680, height: 300,
+  title: "Spectrogram: linear chirp 80 → 3 400 Hz"
+)
+|> VegaLite.data_from_values(spec_data)
+|> VegaLite.mark(:rect)
+|> VegaLite.encode_field(:x, "frame",
+    type: :quantitative,
+    bin: [step: 1],
+    title: "Time (s)",
+    axis: [tick_count: 6, label_expr: "format(datum.value * #{s_per_frame}, '.1f')"]
+  )
+|> VegaLite.encode_field(:y, "bin",
+    type: :quantitative,
+    bin: [step: 1],
+    title: "Frequency (Hz)",
+    axis: [tick_count: 5, label_expr: "format(datum.value * #{hz_per_bin}, '.0f')"]
+  )
+|> VegaLite.encode_field(:color, "power_db",
+    type: :quantitative,
+    aggregate: :mean,
+    scale: [scheme: "viridis"],
+    title: "Power (dB)"
+  )
+```
+
+## Envelope shaping
+
+A raw oscillator plays at full volume for its entire duration, which sounds
+unnatural. Real instruments have an **ADSR envelope**:
+
+* **A**ttack: ramp up from silence
+* **D**ecay: settle to the sustain level
+* **S**ustain: hold while the note is held
+* **R**elease: fade to silence
+
+```elixir
+defmodule ADSR do
+  @doc """
+  Build a linear ADSR envelope tensor.
+
+  Times are in seconds; `sustain` is a level in [0, 1].
+  """
+  def envelope(attack, decay, sustain, release, fs) do
+    make = fn n_samples, from, to ->
+      Nx.linspace(from, to, n: n_samples, type: :f32)
+    end
+
+    n_a = trunc(attack  * fs)
+    n_d = trunc(decay   * fs)
+    n_r = trunc(release * fs)
+    # sustain phase: fixed at sustain level for 1 second
+    n_s = fs
+
+    Nx.concatenate([
+      make.(n_a, 0.0, 1.0),
+      make.(n_d, 1.0, sustain),
+      Nx.broadcast(Nx.tensor(sustain, type: :f32), {n_s}),
+      make.(n_r, sustain, 0.0)
+    ])
+  end
+end
+
+fs = 44_100
+
+env = ADSR.envelope(1, 0.1, 0.6, 1, fs)
+
+t = Nx.linspace(0, Nx.size(env) / fs, n: Nx.size(env), type: :f32)
+note = Nx.sin(Nx.multiply(t, 2 * :math.pi() * 440)) |> Nx.multiply(env)
+
+Kino.Layout.grid([
+  Kino.Layout.grid([Kino.Text.new("Raw sine"),   Audio.play(Nx.sin(Nx.multiply(t, 2 * :math.pi() * 440)), fs)], columns: 2),
+  Kino.Layout.grid([Kino.Text.new("With ADSR"),  Audio.play(note, fs)], columns: 2)
+])
+```
+
+```elixir
+env_data =
+  Enum.zip(Nx.to_flat_list(t), Nx.to_flat_list(env))
+  |> Enum.map(fn {ti, v} -> %{time: ti, level: v} end)
+
+Tucan.lineplot(env_data, "time", "level")
+|> Tucan.Axes.set_x_title("Time (s)")
+|> Tucan.Axes.set_y_title("Amplitude")
+|> Tucan.set_title("ADSR envelope: attack 10 ms, decay 100 ms, sustain 0.6, release 400 ms")
+|> Tucan.set_width(640)
+|> Tucan.set_height(180)
+```
+
+## Additive synthesis
+
+Any periodic timbre can be constructed by summing sine waves at the
+fundamental frequency and its harmonics (integer multiples). Choosing which
+harmonics to include, and how loud each one is, directly sculpts the sound.
+
+Below we build three timbres all on the same fundamental (G2, 98 Hz):
+
+* **Pure**: just the fundamental
+* **Warm**: fundamental + a few quiet even harmonics
+* **Bright**: fundamental + many harmonics with equal weighting (approximates sawtooth)
+
+```elixir
+fs  = 44_100
+dur = 1.5
+f0  = 98.0   # G2
+
+t = Nx.linspace(0, dur, n: trunc(fs * dur), type: :f32)
+
+# Build a tone as a sum of harmonics with given amplitudes
+additive = fn partials ->
+  partials
+  |> Enum.reduce(Nx.broadcast(0.0, {trunc(fs * dur)}), fn {n, amp}, acc ->
+    harmonic = Nx.sin(Nx.multiply(t, 2 * :math.pi() * f0 * n))
+    Nx.add(acc, Nx.multiply(amp, harmonic))
+  end)
+  |> Audio.normalise()
+end
+
+pure   = additive.([{1, 1.0}])
+warm   = additive.([{1, 1.0}, {2, 0.5}, {3, 0.25}, {4, 0.12}])
+bright = additive.(for n <- 1..16, do: {n, 1 / n})
+
+Kino.Layout.grid([
+  Kino.Layout.grid([Kino.Text.new("Pure (1 partial)"),      Audio.play(pure,   fs)], columns: 2),
+  Kino.Layout.grid([Kino.Text.new("Warm (4 partials)"),     Audio.play(warm,   fs)], columns: 2),
+  Kino.Layout.grid([Kino.Text.new("Bright (16 partials)"),  Audio.play(bright, fs)], columns: 2)
+])
+```
+
+The spectrum shows clearly why these tones sound different: each harmonic
+partial appears as a discrete peak.
+
+```elixir
+n      = Nx.size(pure)
+half   = div(n, 2)
+freqs  = Nx.linspace(0, fs / 2, n: half, type: :f32)
+
+spectrum_data =
+  [{pure, "Pure"}, {warm, "Warm"}, {bright, "Bright"}]
+  |> Enum.flat_map(fn {sig, name} ->
+    amps =
+      sig
+      |> Nx.as_type({:c, 64})
+      |> Nx.fft()
+      |> Nx.abs()
+      |> Nx.slice([0], [half])
+
+    Enum.zip(Nx.to_flat_list(freqs), Nx.to_flat_list(amps))
+    |> Enum.filter(fn {f, _} -> f <= 2000 end)
+    |> Enum.map(fn {f, a} -> %{frequency: f, amplitude: a, timbre: name} end)
+  end)
+
+Tucan.lineplot(spectrum_data, "frequency", "amplitude")
+|> Tucan.color_by("timbre")
+|> Tucan.Axes.set_x_title("Frequency (Hz)")
+|> Tucan.Axes.set_y_title("Amplitude")
+|> Tucan.set_title("Spectra of additive synthesis tones (G2, 98 Hz, up to 2 kHz)")
+|> Tucan.set_width(640)
+|> Tucan.set_height(220)
+```
+
+## FIR low-pass filter
+
+`NxSignal.Filters.firwin/3` designs an FIR filter using the window method.
+Here we apply a low-pass filter to the bright (16-partial) tone from above and
+listen to the harmonics being progressively removed.
+
+```elixir
+alias NxSignal.Convolution
+
+cutoff_hz = 500.0
+nyquist   = fs / 2.0
+
+# Design a 101-tap linear-phase low-pass filter
+coeffs = NxSignal.Filters.firwin(101, [cutoff_hz / nyquist])
+
+filtered =
+  Convolution.convolve(bright, coeffs, mode: :same, method: :fft)
+  |> Audio.normalise()
+
+Kino.Layout.grid([
+  Kino.Layout.grid([Kino.Text.new("Unfiltered"),          Audio.play(bright,   fs)], columns: 2),
+  Kino.Layout.grid([Kino.Text.new("Low-pass 500 Hz"),     Audio.play(filtered, fs)], columns: 2)
+])
+```
+
+The filter removes all harmonics above 500 Hz. Only five of the sixteen partials pass through. The attenuation at the cutoff is clearly visible in the spectrum.
+
+```elixir
+filter_spec_data =
+  [{bright, "Unfiltered"}, {filtered, "Low-pass 500 Hz"}]
+  |> Enum.flat_map(fn {sig, label} ->
+    amps =
+      sig
+      |> Nx.as_type({:c, 64})
+      |> Nx.fft()
+      |> Nx.abs()
+      |> Nx.slice([0], [half])
+
+    Enum.zip(Nx.to_flat_list(freqs), Nx.to_flat_list(amps))
+    |> Enum.filter(fn {f, _} -> f <= 2000 end)
+    |> Enum.map(fn {f, a} -> %{frequency: f, amplitude: a, signal: label} end)
+  end)
+
+Tucan.lineplot(filter_spec_data, "frequency", "amplitude")
+|> Tucan.color_by("signal")
+|> Tucan.Axes.set_x_title("Frequency (Hz)")
+|> Tucan.Axes.set_y_title("Amplitude")
+|> Tucan.set_title("Effect of FIR low-pass filter on spectrum (cutoff 500 Hz)")
+|> Tucan.set_width(640)
+|> Tucan.set_height(220)
+```

@@ -38,7 +38,7 @@ n = Nx.iota({full_n})
 d = %{data: Nx.to_flat_list(data[[1000..1250]]), n: Nx.to_flat_list(n[[1000..1250]])}
 ```
 
-<!-- livebook:{"attrs":{"chart_title":"Audio Sample","height":600,"layers":[{"chart_type":"line","color_field":null,"color_field_aggregate":null,"color_field_bin":false,"color_field_scale_scheme":null,"color_field_type":null,"data_variable":"d","x_field":"n","x_field_aggregate":null,"x_field_bin":false,"x_field_scale_type":null,"x_field_type":"ordinal","y_field":"data","y_field_aggregate":null,"y_field_bin":false,"y_field_scale_type":null,"y_field_type":"quantitative"}],"vl_alias":"Elixir.VegaLite","width":600},"chunks":null,"kind":"Elixir.KinoVegaLite.ChartCell","livebook_object":"smart_cell"} -->
+<!-- livebook:{"attrs":"eyJjaGFydF90aXRsZSI6IkF1ZGlvIFNhbXBsZSIsImhlaWdodCI6NjAwLCJsYXllcnMiOlt7ImFjdGl2ZSI6dHJ1ZSwiY2hhcnRfdHlwZSI6ImxpbmUiLCJjb2xvcl9maWVsZCI6bnVsbCwiY29sb3JfZmllbGRfYWdncmVnYXRlIjpudWxsLCJjb2xvcl9maWVsZF9iaW4iOmZhbHNlLCJjb2xvcl9maWVsZF9zY2FsZV9zY2hlbWUiOm51bGwsImNvbG9yX2ZpZWxkX3R5cGUiOm51bGwsImRhdGFfdmFyaWFibGUiOiJkIiwiZ2VvZGF0YV9jb2xvciI6ImJsdWUiLCJsYXRpdHVkZV9maWVsZCI6bnVsbCwibG9uZ2l0dWRlX2ZpZWxkIjpudWxsLCJ4X2ZpZWxkIjoibiIsInhfZmllbGRfYWdncmVnYXRlIjpudWxsLCJ4X2ZpZWxkX2JpbiI6ZmFsc2UsInhfZmllbGRfc2NhbGVfdHlwZSI6bnVsbCwieF9maWVsZF90eXBlIjoib3JkaW5hbCIsInlfZmllbGQiOiJkYXRhIiwieV9maWVsZF9hZ2dyZWdhdGUiOm51bGwsInlfZmllbGRfYmluIjpmYWxzZSwieV9maWVsZF9zY2FsZV90eXBlIjpudWxsLCJ5X2ZpZWxkX3R5cGUiOiJxdWFudGl0YXRpdmUifV0sInZsX2FsaWFzIjoiRWxpeGlyLlZlZ2FMaXRlIiwid2lkdGgiOjYwMH0","chunks":null,"kind":"Elixir.KinoVegaLite.ChartCell","livebook_object":"smart_cell"} -->
 
 ```elixir
 VegaLite.new(width: 600, height: 600, title: "Audio Sample")
@@ -51,7 +51,6 @@ VegaLite.new(width: 600, height: 600, title: "Audio Sample")
 ```elixir
 defmodule Spectrogram do
   alias VegaLite, as: Vl
-  import Nx.Defn
 
   def calculate_stft_and_plot_spectrogram(
         input,
@@ -60,7 +59,8 @@ defmodule Spectrogram do
         plot_cutoff_frequency \\ 4000
       ) do
     n_window = ceil(fs * window_duration_ms)
-    {spectrogram, f, t, max_f} = stft(input, fs: fs, n_window: n_window)
+    window = NxSignal.Windows.hann(n_window, is_periodic: true)
+    {spectrogram, f, t, max_f} = stft(input, window, fs)
 
     max_f = Nx.to_number(max_f)
     spectrogram = Nx.slice(spectrogram, [0, 0], [Nx.size(t), max_f])
@@ -71,23 +71,15 @@ defmodule Spectrogram do
     |> plot()
   end
 
-  defn stft(input, opts) do
-    fs = opts[:fs]
-    n_window = opts[:n_window]
-
-    # ms to samples
-    window = NxSignal.Windows.hann(n: n_window, is_periodic: true)
-
-    # use the default overlap of 50%
+  defp stft(input, window, fs) do
     {s, t, f} = NxSignal.stft(input, window, sampling_rate: fs, fft_length: 1024)
 
     max_f =
-      Nx.select(f >= fs / 2, Nx.iota(f.shape), Nx.size(f) + 1)
+      Nx.select(Nx.greater_equal(f, fs / 2), Nx.iota(Nx.shape(f)), Nx.size(f) + 1)
       |> Nx.argmin()
 
     spectrogram = Nx.abs(s)
-    # to dBFS
-    spectrogram = 20 * Nx.log(spectrogram / Nx.reduce_max(spectrogram)) / Nx.log(10)
+    spectrogram = Nx.multiply(20, Nx.divide(Nx.log(Nx.divide(spectrogram, Nx.reduce_max(spectrogram))), Nx.log(10)))
 
     {spectrogram, f, t, max_f}
   end

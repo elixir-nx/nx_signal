@@ -1,0 +1,267 @@
+# Signal Processing for Economic Data
+
+```elixir
+Mix.install([
+  {:nx_signal, path: __DIR__ |> Path.join("..") |> Path.expand()},
+  {:kino, "~> 0.13"},
+  {:kino_vega_lite, "~> 0.1"},
+  {:tucan, "~> 0.5"}
+])
+```
+
+## Introduction
+
+Financial time series are signals: sequences of numbers indexed by time. Every tool from digital signal processing applies to them directly. This notebook uses a constructed S&P 500-like daily price series to demonstrate:
+
+1. The **FFT** for revealing hidden cycles in market data.
+2. A **FIR low-pass filter** for smoothing out noise, reproducing the familiar "moving average" used by traders.
+3. The **Zoom FFT** for zooming in on the annual-cycle frequency band with much finer resolution than the full FFT allows.
+
+## Generating a price series
+
+We construct a synthetic S&P 500-like price series from first principles:
+a linear log-price trend, a 252-day (annual) seasonal cycle, and a Gaussian
+random walk for daily noise. Building the series this way lets us control
+exactly which frequency components are present, so the FFT results below
+are easy to interpret.
+
+```elixir
+n_days = 3780   # ~15 years of trading days
+
+t = Nx.iota({n_days}, type: :f32)
+{noise, _} = Nx.Random.normal(Nx.Random.key(42), shape: {n_days}, type: :f32)
+
+# Log price = linear growth trend + annual cycle + random walk
+trend_per_day = :math.log(4.8) / n_days        # roughly 4.8× over 15 years
+annual_cycle  = Nx.multiply(0.04, Nx.sin(Nx.multiply(t, 2 * :math.pi() / 252.0)))
+
+random_walk =
+  noise
+  |> Nx.multiply(0.01)
+  |> Nx.to_flat_list()
+  |> Enum.scan(0.0, &(&1 + &2))
+  |> Nx.tensor(type: :f32)
+
+log_prices =
+  Nx.add(Nx.multiply(t, trend_per_day), annual_cycle)
+  |> Nx.add(random_walk)
+  |> Nx.add(:math.log(1000.0))
+
+closes = Nx.exp(log_prices)
+
+# Date axis: Mon-Fri trading days starting 2010-01-04
+dates =
+  Stream.iterate(~D[2010-01-04], &Date.add(&1, 1))
+  |> Stream.filter(fn d -> Date.day_of_week(d) not in [6, 7] end)
+  |> Enum.take(n_days)
+  |> Enum.map(&Date.to_string/1)
+
+IO.puts("#{n_days} synthetic trading days")
+IO.puts("From #{List.first(dates)} to #{List.last(dates)}")
+```
+
+## The price series and log returns
+
+Raw closing prices form a non-stationary signal: the mean drifts upward over
+time. For frequency analysis we instead work with **log returns**
+$r_t = \log(P_t / P_{t-1})$, which are approximately stationary.
+
+```elixir
+n = Nx.size(closes)
+
+# Log returns: r[t] = log(P[t] / P[t-1])
+log_returns =
+  Nx.log(closes[1..(n - 1)]) |> Nx.subtract(Nx.log(closes[0..(n - 2)]))
+
+price_data =
+  Enum.zip(dates, Nx.to_flat_list(closes))
+  |> Enum.map(fn {d, c} -> %{date: d, close: c} end)
+
+Tucan.lineplot(price_data, "date", "close")
+|> VegaLite.encode_field(:x, "date", type: :temporal, title: "Date")
+|> Tucan.set_title("S&P 500 Daily Close")
+|> Tucan.set_width(680)
+|> Tucan.set_height(240)
+```
+
+```elixir
+return_data =
+  Enum.zip(Enum.drop(dates, 1), Nx.to_flat_list(log_returns))
+  |> Enum.map(fn {d, r} -> %{date: d, return: r} end)
+
+Tucan.lineplot(return_data, "date", "return")
+|> VegaLite.encode_field(:x, "date", type: :temporal, title: "Date")
+|> Tucan.set_title("S&P 500 Daily Log Returns")
+|> Tucan.set_width(680)
+|> Tucan.set_height(200)
+```
+
+## Frequency analysis with the FFT
+
+`Nx.fft` decomposes the log-return signal into its constituent frequencies.
+The x-axis below is expressed in **trading days per cycle**: a period of 252
+corresponds to the annual cycle, 63 to the quarterly cycle, 21 to the monthly
+cycle.
+
+```elixir
+m = Nx.size(log_returns)
+
+# Subtract mean to suppress the DC (zero-frequency) component
+returns_ac = Nx.subtract(log_returns, Nx.mean(log_returns))
+
+# Apply a Hann window to reduce spectral leakage
+window = NxSignal.Windows.hann(m, is_periodic: true)
+windowed = Nx.multiply(returns_ac, window)
+
+spectrum = Nx.fft(Nx.as_type(windowed, {:c, 64}))
+power    = spectrum |> Nx.abs() |> Nx.pow(2)
+
+# Frequency axis: cycles per trading day
+# Only the positive frequencies (first half) are meaningful for real signals
+half = div(m, 2)
+freq = Nx.linspace(0, 0.5, n: half, endpoint: false, type: :f32)
+
+# Convert to period (trading days per cycle); skip DC bin (index 0)
+period_days = Nx.divide(1.0, freq[1..(half - 1)])
+power_half  = power[1..(half - 1)]
+
+# Clip period axis to a readable range: 5 to 500 trading days
+{periods_roi, powers_roi} =
+  Enum.zip(Nx.to_flat_list(period_days), Nx.to_flat_list(power_half))
+  |> Enum.filter(fn {p, _} -> p >= 5 and p <= 500 end)
+  |> Enum.unzip()
+
+spectrum_data =
+  Enum.zip(periods_roi, powers_roi)
+  |> Enum.map(fn {p, pw} -> %{period: p, power: pw} end)
+
+VegaLite.new(width: 680, height: 260, title: "Power Spectrum of S&P 500 Log Returns")
+|> VegaLite.data_from_values(spectrum_data)
+|> VegaLite.mark(:bar, tooltip: true)
+|> VegaLite.encode_field(:x, "period",
+    type: :quantitative,
+    title: "Period (trading days)",
+    scale: [type: "log"]
+  )
+|> VegaLite.encode_field(:y, "power",
+    type: :quantitative,
+    title: "Power",
+    scale: [type: "log"]
+  )
+```
+
+Vertical lines around period ≈ 252 (annual) and 63 (quarterly) are expected
+artefacts of well-known seasonal patterns in equity markets.
+
+## Smoothing with a low-pass FIR filter
+
+A **moving average** is, mathematically speaking, a low-pass FIR filter: it suppresses
+high-frequency fluctuations (day-to-day noise) and preserves the underlying
+trend.
+
+`NxSignal.Filters.firwin/3` designs an FIR filter using the window method.
+Below we design a linear-phase filter whose cutoff is set to 1/63 cycles per
+trading day. This is equivalent to a 63-day (roughly quarterly) moving average, but
+with a sharper roll-off than the simple boxcar.
+
+```elixir
+alias NxSignal.Convolution
+
+# Normalised cutoff: (1/63 cycles/day) / (Nyquist = 0.5 cycles/day) = 2/63
+cutoff_norm = 2 / 63
+
+# 127-tap filter (odd tap count → linear phase Type I)
+coeffs = NxSignal.Filters.firwin(127, [cutoff_norm], window: :hamming)
+
+smoothed =
+  Convolution.fftconvolve(closes, coeffs, mode: :same)
+
+# Trim the edge transient introduced by the filter delay (63 samples each side)
+trim = 63
+
+trim_dates  = Enum.slice(dates,                    trim, n - 2 * trim)
+trim_close  = Nx.to_flat_list(closes[trim..(n - trim - 1)])
+trim_smooth = Nx.to_flat_list(smoothed[trim..(n - trim - 1)])
+
+# Combine raw and smoothed into a single long-form dataset
+chart_data_long =
+  Enum.zip([trim_dates, trim_close, trim_smooth])
+  |> Enum.flat_map(fn {d, raw, filt} ->
+    [%{date: d, close: raw, series: "Raw"}, %{date: d, close: filt, series: "FIR smoothed (63-day)"}]
+  end)
+
+Tucan.lineplot(chart_data_long, "date", "close")
+|> Tucan.color_by("series")
+|> VegaLite.encode_field(:x, "date", type: :temporal, title: "Date")
+|> Tucan.set_title("S&P 500: Raw vs FIR Smoothed (63-day)")
+|> Tucan.set_width(680)
+|> Tucan.set_height(260)
+```
+
+The smoothed line tracks the broad trend while the raw line shows the daily
+volatility that the filter removes. This is exactly the "50-day moving average"
+chart familiar to technical analysts, produced here with a principled FIR
+design rather than a simple average.
+
+## Zoom FFT: the annual cycle in detail
+
+The standard FFT spaces its bins uniformly across $[0, 0.5]$ cycles/day.
+Near the annual frequency ($1/252 \approx 0.00397$ cycles/day) the bin
+spacing is only $1/N$ cycles/day. With $N \approx 3\,700$ daily samples that
+is about $2.7 \times 10^{-4}$ cycles/day, one bin per 8 calendar months.
+That makes it hard to see whether the annual peak splits into sub-peaks or
+drifts between years.
+
+`NxSignal.zoom_fft/4` concentrates all $M$ output bins on a narrow band, giving
+resolution proportional to $M$ rather than $N$.
+
+```elixir
+m_zoom = 1024
+
+# Normalised frequency band around the annual cycle
+# Annual: 1/252 ≈ 0.00397 cycles/day;  examine ± 50% either side
+f1_norm = (1 / 400) / 0.5   # lower bound (400-day period)
+f2_norm = (1 / 150) / 0.5   # upper bound (150-day period)
+
+zoom = NxSignal.zoom_fft(returns_ac, f1_norm, f2_norm, m: m_zoom)
+zoom_power = zoom |> Nx.abs() |> Nx.pow(2) |> Nx.to_flat_list()
+
+# Frequency axis for the zoom output (in cycles/day)
+f_lo = 1 / 400 / 1.0
+f_hi = 1 / 150 / 1.0
+
+zoom_periods =
+  Enum.map(0..(m_zoom - 1), fn k ->
+    freq = f_lo + k * (f_hi - f_lo) / m_zoom
+    1 / freq
+  end)
+
+zoom_data =
+  Enum.zip(zoom_periods, zoom_power)
+  |> Enum.map(fn {p, pw} -> %{period: p, power: pw} end)
+
+Tucan.lineplot(zoom_data, "period", "power", tooltip: true)
+|> VegaLite.encode_field(:x, "period",
+  type: :quantitative,
+  title: "Period (trading days)",
+  scale: [domain: [150, 400]]
+)
+|> Tucan.Axes.set_y_title("Power")
+|> Tucan.set_title("Zoom FFT: Annual Cycle Band (150-400 trading-day periods)")
+|> Tucan.set_width(680)
+|> Tucan.set_height(260)
+```
+
+The Zoom FFT provides $1024/N$ times finer resolution than the standard FFT in
+this band, making it straightforward to see how spectral energy is distributed
+around the annual cycle frequency and whether it is concentrated (a clean
+annual periodicity) or spread across a wider range of periods.
+
+## Summary
+
+| Technique       | NxSignal function                            | Finance application                                                          |
+| --------------- | -------------------------------------------- | ---------------------------------------------------------------------------- |
+| FFT             | `Nx.fft`                                     | Identify dominant cycles and seasonal patterns                               |
+| FIR low-pass    | `Filters.firwin` + `Convolution.fftconvolve` | Noise removal; reproduces the moving average used in technical analysis      |
+| Zoom FFT        | `NxSignal.zoom_fft`                          | High-resolution examination of a specific frequency band (e.g. annual cycle) |
+| Window function | `Windows.hann`                               | Reduce spectral leakage before FFT                                           |
