@@ -1,0 +1,307 @@
+# Chirp Z-Transform and Zoom FFT
+
+```elixir
+Mix.install([
+  {:nx_signal, path: __DIR__ |> Path.join("..") |> Path.expand()},
+  {:kino_vega_lite, "~> 0.1"},
+  {:tucan, "~> 0.5"}
+])
+```
+
+## What is the Chirp Z-Transform?
+
+The standard Discrete Fourier Transform (DFT) evaluates the z-transform of a
+signal at $N$ equally-spaced points on the **unit circle** in the complex plane:
+
+$$
+z_k = e^{j2\pi k/N}, \quad k = 0, \ldots, N-1
+$$
+
+The **Chirp Z-Transform (CZT)** generalises this. Instead of the unit circle,
+it evaluates the z-transform on an arbitrary spiral contour defined by a
+starting point $A$ and a step ratio $W$:
+
+$$
+z_k = A \cdot W^{-k}, \quad k = 0, \ldots, M-1
+$$
+
+$$
+X[k] = \sum_{n=0}^{N-1} x[n] \cdot A^{-n} \cdot W^{nk}
+$$
+
+This unlocks two powerful capabilities:
+
+* **$M \neq N$**: compute any number of output points from any length input.
+* **Zoom FFT**: concentrate all $M$ output bins over a narrow frequency band,
+  giving arbitrarily fine frequency resolution without increasing the signal
+  length.
+
+The CZT is computed efficiently using Bluestein's algorithm, which rewrites
+the sum as a convolution and evaluates it via FFT in
+$O((N + M) \log(N + M))$ time — the same asymptotic cost as the FFT.
+
+## CZT as a generalised DFT
+
+With default parameters ($A = 1$, $W = e^{-j2\pi/N}$, $M = N$),
+`NxSignal.czt/2` is identical to `Nx.fft/1`.
+
+```elixir
+fs = 200
+duration = 1.0
+n = trunc(fs * duration)
+
+t = Nx.linspace(0, duration, n: n, endpoint: false, type: {:f, 32})
+
+# Signal: two tones at 10 Hz and 35 Hz
+x =
+  Nx.add(
+    Nx.sin(Nx.multiply(t, 2 * :math.pi() * 10)),
+    Nx.multiply(0.5, Nx.sin(Nx.multiply(t, 2 * :math.pi() * 35)))
+  )
+
+fft_result = Nx.fft(Nx.as_type(x, {:c, 64}))
+czt_result = NxSignal.czt(x)
+
+max_diff =
+  Nx.subtract(Nx.abs(czt_result), Nx.abs(fft_result))
+  |> Nx.abs()
+  |> Nx.reduce_max()
+
+IO.inspect(Nx.to_number(max_diff), label: "max |CZT| - |FFT| difference")
+```
+
+The difference is at the level of floating-point rounding error, confirming
+the two are mathematically equivalent in the default case.
+
+The signal itself, 50 ms of the two tones, shows their superposition clearly:
+
+```elixir
+n_show = trunc(fs * 0.05)
+
+time_data =
+  Enum.zip(Nx.to_flat_list(t[0..(n_show - 1)]), Nx.to_flat_list(x[0..(n_show - 1)]))
+  |> Enum.map(fn {ti, xi} -> %{time: ti, amplitude: xi} end)
+
+Tucan.lineplot(time_data, "time", "amplitude")
+|> Tucan.Axes.set_x_title("Time (s)")
+|> Tucan.Axes.set_y_title("Amplitude")
+|> Tucan.set_title("Signal 10 Hz + 0.5 × 35 Hz (first 50 ms)")
+|> Tucan.set_width(680)
+|> Tucan.set_height(180)
+```
+
+Now let's look at the full spectrum:
+
+```elixir
+half  = div(n, 2)
+freqs = NxSignal.fft_frequencies(fs, fft_length: n)[0..half] |> Nx.to_flat_list()
+amps  = Nx.abs(fft_result)[0..half] |> Nx.to_flat_list()
+
+spectrum_data =
+  Enum.zip(freqs, amps)
+  |> Enum.map(fn {f, a} -> %{frequency: f, amplitude: a} end)
+
+Tucan.bar(spectrum_data, "frequency", "amplitude", tooltip: true)
+|> VegaLite.encode_field(:x, "frequency", type: :quantitative, title: "Frequency (Hz)")
+|> Tucan.Axes.set_y_title("Amplitude")
+|> Tucan.set_title("DFT spectrum: 10 Hz and 35 Hz tones")
+|> Tucan.set_width(680)
+|> Tucan.set_height(260)
+```
+
+## Zoom FFT: resolving closely-spaced tones
+
+This is where the CZT really shines.
+
+Suppose we have two tones at 49 Hz and 51 Hz, sampled at 200 Hz for 1 second.
+With a 200-point DFT the bin spacing is $200/200 = 1\,\text{Hz}$, so in
+principle we have just enough resolution to separate them. In practice, spectral
+leakage smears the peaks and makes the separation unclear.
+
+With `zoom_fft`, we can point all $M$ output bins at the narrow band
+$[45, 55]\,\text{Hz}$, giving a bin spacing of just $10/M\,\text{Hz}$ regardless of the signal length.
+
+```elixir
+fs = 200
+duration = 1.0
+n = trunc(fs * duration)
+
+t = Nx.linspace(0, duration, n: n, endpoint: false, type: {:f, 64})
+
+f_a = 49.0
+f_b = 51.0
+
+x2 =
+  Nx.add(
+    Nx.cos(Nx.multiply(t, 2 * :math.pi() * f_a)),
+    Nx.cos(Nx.multiply(t, 2 * :math.pi() * f_b))
+  )
+```
+
+The standard DFT and the Zoom FFT side by side (the resolution gain is
+immediately visible):
+
+```elixir
+# Standard DFT — 40 to 60 Hz region
+fft_result2 = Nx.fft(x2)
+half2 = div(n, 2)
+freqs_full = NxSignal.fft_frequencies(fs, fft_length: n, type: {:f, 64})[0..half2]
+amps_full  = Nx.abs(fft_result2)[0..half2]
+
+dft_data =
+  Enum.zip(Nx.to_flat_list(freqs_full), Nx.to_flat_list(amps_full))
+  |> Enum.filter(fn {f, _} -> f >= 40 and f <= 60 end)
+  |> Enum.map(fn {f, a} -> %{frequency: f, amplitude: a, method: "Standard DFT (1 Hz bins)"} end)
+
+# Zoom FFT — 512 bins over 45–55 Hz
+m = 512
+f1_norm = 45.0 / fs
+f2_norm = 55.0 / fs
+
+zoom_result = NxSignal.zoom_fft(x2, f1_norm, f2_norm, m: m)
+zoom_amps   = Nx.abs(zoom_result)
+
+zoom_data =
+  Nx.linspace(45.0, 55.0, n: m, endpoint: false, type: {:f, 64})
+  |> Nx.to_flat_list()
+  |> Enum.zip(Nx.to_flat_list(zoom_amps))
+  |> Enum.map(fn {f, a} -> %{frequency: f, amplitude: a, method: "Zoom FFT (#{10.0 / m |> Float.round(3)} Hz bins)"} end)
+
+comparison_data = dft_data ++ zoom_data
+
+Tucan.lineplot(comparison_data, "frequency", "amplitude")
+|> Tucan.color_by("method")
+|> Tucan.Axes.set_x_title("Frequency (Hz)")
+|> Tucan.Axes.set_y_title("Amplitude")
+|> Tucan.set_title("DFT vs Zoom FFT — resolving 49 Hz and 51 Hz tones")
+|> Tucan.set_width(680)
+|> Tucan.set_height(260)
+```
+
+Let's confirm by finding the top-2 frequency bins in the zoom output:
+
+```elixir
+{_vals, indices} = Nx.top_k(zoom_amps, k: 2)
+
+peak_freqs =
+  indices
+  |> Nx.to_flat_list()
+  |> Enum.map(fn i -> 45.0 + i * (10.0 / m) end)
+  |> Enum.sort()
+
+IO.inspect(peak_freqs, label: "Peak frequencies (Hz)")
+```
+
+## The contour in the z-plane
+
+To understand *why* the Zoom FFT has higher resolution, it helps to see what
+the two transforms are actually doing in the complex plane.
+
+The DFT evaluates the z-transform at $N$ equally-spaced points around the
+**full** unit circle. The Zoom FFT evaluates at $M$ points along a **short arc**
+of the unit circle — the arc corresponding to the frequency band $[f_1, f_2]$.
+
+With the same $M$ and $N$, the arc points are spaced $\frac{f_2 - f_1}{M}$
+apart instead of $\frac{f_s}{N}$ apart, giving $\frac{(f_2-f_1)/M}{f_s/N}$
+times finer resolution.
+
+```elixir
+n_dft  = 64   # number of DFT evaluation points to display
+m_zoom = 64   # same number of zoom points, to make spacing difference visible
+
+# DFT: N equally-spaced points on the full unit circle
+dft_points =
+  Enum.map(0..(n_dft - 1), fn k ->
+    angle = 2 * :math.pi() * k / n_dft
+    %{re: :math.cos(angle), im: :math.sin(angle), transform: "DFT (full circle)"}
+  end)
+
+# Zoom FFT arc: M points on the arc from f1 to f2
+f1 = 45.0
+f2 = 55.0
+fs_plane = 200.0
+
+zoom_points =
+  Enum.map(0..(m_zoom - 1), fn k ->
+    freq = f1 + k * (f2 - f1) / m_zoom
+    angle = 2 * :math.pi() * freq / fs_plane
+    %{re: :math.cos(angle), im: :math.sin(angle), transform: "Zoom FFT (45–55 Hz arc)"}
+  end)
+
+contour_data = dft_points ++ zoom_points
+
+Tucan.scatter(contour_data, "re", "im", point_size: 30)
+|> Tucan.color_by("transform")
+|> Tucan.Axes.set_x_title("Re(z)")
+|> Tucan.Axes.set_y_title("Im(z)")
+|> Tucan.set_title("Evaluation points in the z-plane")
+|> Tucan.set_width(400)
+|> Tucan.set_height(400)
+```
+
+The DFT points (grey) are spread thinly around the whole circle. The Zoom FFT
+points (orange) are clustered on the small arc between 45 Hz and 55 Hz. We have the
+same $M$ points covering $\frac{f_2-f_1}{f_s} = 5\%$ of the circle, giving
+$20\times$ finer spacing in that region.
+
+## Evaluating the z-transform off the unit circle
+
+The CZT can evaluate the z-transform at any points in the complex plane, not
+just the unit circle. For example, on a circle of radius $r > 1$ you can
+study the pole-zero structure of a system without being constrained to the
+unit circle where poles and zeros have the most influence.
+
+Here we evaluate the z-transform of a simple FIR filter at 200 points on
+the unit circle and on a circle of radius 1.5:
+
+```elixir
+# FIR low-pass filter: h = [1, 2, 3, 2, 1] (normalised)
+h = Nx.tensor([1.0, 2.0, 3.0, 2.0, 1.0]) |> Nx.divide(9.0)
+
+m = 200
+
+# Unit-circle response (standard DFT)
+hz_unit = NxSignal.czt(h, m: m)
+
+# Outer circle: radius r = 1.5, starting at angle 0
+r = 1.5
+a = Nx.complex(r, 0.0)
+w = Nx.complex(:math.cos(-2 * :math.pi() / m), :math.sin(-2 * :math.pi() / m))
+
+hz_outer = NxSignal.czt(h, m: m, a: a, w: w)
+
+angles = Nx.linspace(0, 360, n: m, endpoint: false, type: {:f, 64}) |> Nx.to_flat_list()
+
+contours_data =
+  Enum.zip(angles, Nx.to_flat_list(Nx.abs(hz_unit)))
+  |> Enum.map(fn {a, amp} -> %{angle: a, amplitude: amp, contour: "|z| = 1 (unit circle)"} end)
+  |> Kernel.++(
+    Enum.zip(angles, Nx.to_flat_list(Nx.abs(hz_outer)))
+    |> Enum.map(fn {a, amp} -> %{angle: a, amplitude: amp, contour: "|z| = 1.5"} end)
+  )
+
+Tucan.lineplot(contours_data, "angle", "amplitude", tooltip: true)
+|> Tucan.color_by("contour")
+|> Tucan.Axes.set_x_title("Angle (degrees)")
+|> Tucan.Axes.set_y_title("|H(z)|")
+|> Tucan.set_title("FIR frequency response on two contours")
+|> Tucan.set_width(680)
+|> Tucan.set_height(280)
+```
+
+The unit-circle response ($|z|=1$) is the standard frequency response. The
+outer-circle response ($|z|=1.5$) shows the same low-pass shape but with
+reduced dynamic range — consistent with moving away from the unit circle
+where the filter's poles and zeros have most influence.
+
+## Summary
+
+| Function                             | What it does                                                        |
+| ------------------------------------ | ------------------------------------------------------------------- |
+| `NxSignal.czt(x)`                    | Generalised DFT on any spiral contour; defaults to the standard DFT |
+| `NxSignal.czt(x, m: m, a: a, w: w)`  | $M$-point evaluation at $z_k = A \, W^{-k}$                         |
+| `NxSignal.zoom_fft(x, f1, f2)`       | High-resolution spectrum over normalised $[f_1, f_2]$               |
+| `NxSignal.zoom_fft(x, f1, f2, m: m)` | Same with an explicit output bin count                              |
+
+Both functions return complex tensors; use `Nx.abs/1` for magnitude and
+`Nx.phase/1` for phase.

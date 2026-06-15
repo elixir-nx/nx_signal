@@ -733,4 +733,155 @@ defmodule NxSignal do
     |> Tuple.delete_at(idx)
     |> put_elem(idx, out_len)
   end
+
+  @doc ~S"""
+  Chirp Z-Transform.
+
+  Evaluates the z-transform of `x` on a spiral contour in the z-plane,
+  returning $M$ output points. Uses Bluestein's identity to express the
+  sum as a convolution, giving $O((N+M)\log(N+M))$ complexity.
+
+  $$
+  X[k] = \sum_{n=0}^{N-1} x[n] \, A^{-n} \, W^{nk}, \quad k = 0, 1, \ldots, M-1
+  $$
+
+  When $A = 1$, $W = e^{-j2\pi/M}$, and $M = N$, the result is identical
+  to the standard DFT.
+
+  See also: `zoom_fft/4`
+
+  ## Options
+
+    * `:m` - number of output points $M$. Defaults to `Nx.size(x)`.
+    * `:w` - contour ratio $W$ (complex scalar tensor).
+      Defaults to $e^{-j2\pi/M}$, which gives the DFT.
+    * `:a` - contour starting point $A$ (complex scalar tensor).
+      Defaults to $1+0j$.
+
+  ## Examples
+
+      iex> x = Nx.tensor([1.0, 0.0, 0.0, 0.0])
+      iex> result = NxSignal.czt(x)
+      iex> expected = Nx.fft(Nx.as_type(x, {:c, 64}))
+      iex> Nx.all_close(Nx.abs(result), Nx.abs(expected), atol: 1.0e-5) == Nx.tensor(1, type: :u8)
+      true
+
+  """
+  @doc type: :transforms
+  deftransform czt(x, opts \\ []) do
+    opts = Keyword.validate!(opts, [:m, :w, :a])
+
+    {n} = Nx.shape(x)
+    m = opts[:m] || n
+
+    fft_len = czt_next_pow2(n + m - 1)
+
+    w =
+      opts[:w] ||
+        Nx.complex(:math.cos(-2 * :math.pi() / m), :math.sin(-2 * :math.pi() / m))
+
+    a = opts[:a] || Nx.complex(1.0, 0.0)
+
+    czt_n(x, w, a, m: m, n: n, fft_len: fft_len)
+  end
+
+  deftransformp czt_next_pow2(n) when n <= 1, do: 1
+
+  deftransformp czt_next_pow2(n) do
+    Integer.pow(2, ceil(:math.log2(n)))
+  end
+
+  defnp czt_n(x, w, a, opts) do
+    m = opts[:m]
+    n = opts[:n]
+    fft_len = opts[:fft_len]
+
+    x = Nx.as_type(x, {:c, 64})
+    w = Nx.as_type(w, {:c, 64})
+    a = Nx.as_type(a, {:c, 64})
+
+    log_w = Nx.log(w)
+    log_a = Nx.log(a)
+
+    # {:c, 64} has 32-bit components; use {:f, 32} so no silent promotion occurs
+    n_idx = Nx.iota({n}, type: {:f, 32})
+    k_idx = Nx.iota({m}, type: {:f, 32})
+
+    # Pre-multiply: yn[n] = x[n] · a^{-n} · w^{n²/2}
+    yn = x * Nx.exp(-n_idx * log_a) * Nx.exp(n_idx * n_idx / 2 * log_w)
+
+    # Zero-pad yn to FFT length
+    yn_padded = Nx.pad(yn, Nx.as_type(0, {:c, 64}), [{0, fft_len - n, 0}])
+
+    # Build chirp kernel h_padded of length fft_len arranged for circular convolution:
+    #   positions 0..M-1:       h[k]    = w^{-k²/2}
+    #   positions M..L-N:       0
+    #   positions L-N+1..L-1:  h[-j]   = w^{-j²/2}  for j = N-1 downto 1
+    i = Nx.iota({fft_len}, type: {:f, 32})
+    pos_vals = Nx.exp(-i * i / 2 * log_w)
+    neg_vals = Nx.exp(-(fft_len - i) * (fft_len - i) / 2 * log_w)
+
+    zero_c = Nx.as_type(0, {:c, 64})
+    h_padded = Nx.select(i < m, pos_vals, Nx.select(i > fft_len - n, neg_vals, zero_c))
+
+    # FFT-based convolution
+    g = Nx.ifft(Nx.fft(yn_padded) * Nx.fft(h_padded))
+
+    # Post-multiply: X[k] = w^{k²/2} · g[k],  k = 0…M-1
+    Nx.slice(g, [0], [m]) * Nx.exp(k_idx * k_idx / 2 * log_w)
+  end
+
+  @doc ~S"""
+  Zoom FFT: high-resolution DFT over a narrow frequency band.
+
+  Computes $M$ output samples of the DFT concentrated in the normalised
+  frequency range $[f_1, f_2]$. This is a thin wrapper around `czt/2` that
+  sets:
+
+  $$
+  A = e^{j2\pi f_1}, \quad W = e^{-j2\pi(f_2 - f_1)/M}
+  $$
+
+  The output frequencies are $f_k = f_1 + k\,(f_2 - f_1)/M$ for $k = 0, \ldots, M-1$.
+
+  See also: `czt/2`
+
+  ## Arguments
+
+    * `x`  - input signal, shape `{n}`.
+    * `f1` - lower bound of the frequency range (normalised, 0 to 1).
+    * `f2` - upper bound of the frequency range (normalised, 0 to 1).
+
+  ## Options
+
+    * `:m` - number of output points $M$. Defaults to `Nx.size(x)`.
+
+  ## Examples
+
+      iex> x = Nx.tensor([1.0, 0.0, 0.0, 0.0])
+      iex> full = NxSignal.zoom_fft(x, 0.0, 1.0)
+      iex> dft  = Nx.fft(Nx.as_type(x, {:c, 64}))
+      iex> Nx.all_close(Nx.abs(full), Nx.abs(dft), atol: 1.0e-5) == Nx.tensor(1, type: :u8)
+      true
+
+  """
+  @doc type: :transforms
+  deftransform zoom_fft(x, f1, f2, opts \\ []) do
+    opts = Keyword.validate!(opts, [:m])
+
+    {n} = Nx.shape(x)
+    m = opts[:m] || n
+
+    # A = e^{+j2πf1}: the CZT evaluates at A^{-n}, so the positive exponent here
+    # places the first evaluation point at frequency f1.
+    a = Nx.complex(:math.cos(2 * :math.pi() * f1), :math.sin(2 * :math.pi() * f1))
+
+    w =
+      Nx.complex(
+        :math.cos(-2 * :math.pi() * (f2 - f1) / m),
+        :math.sin(-2 * :math.pi() * (f2 - f1) / m)
+      )
+
+    czt(x, m: m, w: w, a: a)
+  end
 end
