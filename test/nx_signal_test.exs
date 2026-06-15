@@ -42,6 +42,31 @@ defmodule NxSignalTest do
 
       assert Nx.Type.complex?(Nx.type(result))
     end
+
+    test "preserves f64 precision" do
+      x = Nx.tensor([1.0, 2.0, 3.0, 4.0], type: {:f, 64})
+      result = NxSignal.czt(x)
+
+      assert Nx.type(result) == {:c, 128}
+    end
+
+    test "2D input with axis: 1 matches row-wise 1D CZT" do
+      rows = Nx.tensor([[1.0, 2.0, 3.0, 4.0], [4.0, 3.0, 2.0, 1.0]])
+      result_2d = NxSignal.czt(rows, axis: 1)
+      expected = Nx.stack([NxSignal.czt(rows[0]), NxSignal.czt(rows[1])])
+
+      assert_all_close(result_2d, expected, atol: 1.0e-5)
+    end
+
+    test "2D input with axis: 0 matches column-wise 1D CZT" do
+      cols = Nx.tensor([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])
+      result_2d = NxSignal.czt(cols, axis: 0)
+      col0 = NxSignal.czt(cols[[.., 0]])
+      col1 = NxSignal.czt(cols[[.., 1]])
+      expected = Nx.stack([col0, col1], axis: 1)
+
+      assert_all_close(result_2d, expected, atol: 1.0e-5)
+    end
   end
 
   describe "zoom_fft/4" do

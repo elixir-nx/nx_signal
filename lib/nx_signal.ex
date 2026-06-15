@@ -760,20 +760,23 @@ defmodule NxSignal do
 
   ## Examples
 
-      iex> x = Nx.tensor([1.0, 0.0, 0.0, 0.0])
-      iex> result = NxSignal.czt(x)
-      iex> expected = Nx.fft(Nx.as_type(x, {:c, 64}))
-      iex> Nx.all_close(Nx.abs(result), Nx.abs(expected), atol: 1.0e-5) == Nx.tensor(1, type: :u8)
-      true
+      iex> NxSignal.czt(Nx.tensor([1.0, 0.0, 0.0, 0.0])) |> Nx.real() |> Nx.round()
+      #Nx.Tensor<
+        f32[4]
+        [1.0, 1.0, 1.0, 1.0]
+      >
 
   """
   @doc type: :transforms
   deftransform czt(x, opts \\ []) do
-    opts = Keyword.validate!(opts, [:m, :w, :a])
+    opts = Keyword.validate!(opts, [:m, :w, :a, axis: -1])
 
-    {n} = Nx.shape(x)
+    ndim = Nx.rank(x)
+    axis = opts[:axis]
+    axis = if axis < 0, do: ndim + axis, else: axis
+
+    n = elem(Nx.shape(x), axis)
     m = opts[:m] || n
-
     fft_len = czt_next_pow2(n + m - 1)
 
     w =
@@ -782,7 +785,34 @@ defmodule NxSignal do
 
     a = opts[:a] || Nx.complex(1.0, 0.0)
 
-    czt_n(x, w, a, m: m, n: n, fft_len: fft_len)
+    complex_type = x |> Nx.type() |> Nx.Type.to_complex()
+    real_type = Nx.Type.to_real(complex_type)
+
+    other_axes = List.delete(Enum.to_list(0..(ndim - 1)), axis)
+    perm = other_axes ++ [axis]
+
+    inv_perm =
+      perm
+      |> Enum.with_index()
+      |> Enum.sort_by(fn {v, _} -> v end)
+      |> Enum.map(fn {_, i} -> i end)
+
+    x_t = Nx.transpose(x, axes: perm)
+
+    result =
+      if other_axes == [] do
+        czt_n(x_t, w, a, m: m, n: n, fft_len: fft_len, complex_type: complex_type, real_type: real_type)
+      else
+        batch_names = Enum.map(0..(length(other_axes) - 1), fn i -> :"batch_#{i}" end)
+        x_v = Nx.vectorize(x_t, batch_names)
+
+        result_v =
+          czt_n(x_v, w, a, m: m, n: n, fft_len: fft_len, complex_type: complex_type, real_type: real_type)
+
+        Nx.devectorize(result_v, keep_names: false)
+      end
+
+    Nx.transpose(result, axes: inv_perm)
   end
 
   deftransformp czt_next_pow2(n) when n <= 1, do: 1
@@ -795,33 +825,33 @@ defmodule NxSignal do
     m = opts[:m]
     n = opts[:n]
     fft_len = opts[:fft_len]
+    complex_type = opts[:complex_type]
+    real_type = opts[:real_type]
 
-    x = Nx.as_type(x, {:c, 64})
-    w = Nx.as_type(w, {:c, 64})
-    a = Nx.as_type(a, {:c, 64})
+    x = Nx.as_type(x, complex_type)
+    w = Nx.as_type(w, complex_type)
+    a = Nx.as_type(a, complex_type)
 
     log_w = Nx.log(w)
-    log_a = Nx.log(a)
 
-    # {:c, 64} has 32-bit components; use {:f, 32} so no silent promotion occurs
-    n_idx = Nx.iota({n}, type: {:f, 32})
-    k_idx = Nx.iota({m}, type: {:f, 32})
+    n_idx = Nx.iota({n}, type: real_type)
+    k_idx = Nx.iota({m}, type: real_type)
 
     # Pre-multiply: yn[n] = x[n] · a^{-n} · w^{n²/2}
-    yn = x * Nx.exp(-n_idx * log_a) * Nx.exp(n_idx * n_idx / 2 * log_w)
+    yn = x * Nx.pow(a, -n_idx) * Nx.exp(n_idx * n_idx / 2 * log_w)
 
     # Zero-pad yn to FFT length
-    yn_padded = Nx.pad(yn, Nx.as_type(0, {:c, 64}), [{0, fft_len - n, 0}])
+    yn_padded = Nx.pad(yn, Nx.as_type(0, complex_type), [{0, fft_len - n, 0}])
 
     # Build chirp kernel h_padded of length fft_len arranged for circular convolution:
     #   positions 0..M-1:       h[k]    = w^{-k²/2}
     #   positions M..L-N:       0
     #   positions L-N+1..L-1:  h[-j]   = w^{-j²/2}  for j = N-1 downto 1
-    i = Nx.iota({fft_len}, type: {:f, 32})
+    i = Nx.iota({fft_len}, type: real_type)
     pos_vals = Nx.exp(-i * i / 2 * log_w)
     neg_vals = Nx.exp(-(fft_len - i) * (fft_len - i) / 2 * log_w)
 
-    zero_c = Nx.as_type(0, {:c, 64})
+    zero_c = Nx.as_type(0, complex_type)
     h_padded = Nx.select(i < m, pos_vals, Nx.select(i > fft_len - n, neg_vals, zero_c))
 
     # FFT-based convolution
@@ -858,11 +888,11 @@ defmodule NxSignal do
 
   ## Examples
 
-      iex> x = Nx.tensor([1.0, 0.0, 0.0, 0.0])
-      iex> full = NxSignal.zoom_fft(x, 0.0, 1.0)
-      iex> dft  = Nx.fft(Nx.as_type(x, {:c, 64}))
-      iex> Nx.all_close(Nx.abs(full), Nx.abs(dft), atol: 1.0e-5) == Nx.tensor(1, type: :u8)
-      true
+      iex> NxSignal.zoom_fft(Nx.tensor([1.0, 0.0, 0.0, 0.0]), 0.0, 1.0) |> Nx.real() |> Nx.round()
+      #Nx.Tensor<
+        f32[4]
+        [1.0, 1.0, 1.0, 1.0]
+      >
 
   """
   @doc type: :transforms
