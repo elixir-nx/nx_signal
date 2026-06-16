@@ -55,20 +55,20 @@ x =
 
 y = NxSignal.Convolution.convolve(x, h, mode: :full)
 
-samples_x = Enum.map(0..29, & &1)
-samples_y = Enum.map(0..(Nx.size(y) - 1), & &1)
-
 impulse_data =
-  Enum.zip(samples_x, Nx.to_flat_list(x))
-  |> Enum.map(fn {i, v} -> %{sample: i, value: v, signal: "Input x[n]"} end)
+  Enum.zip_with(Enum.to_list(0..29), Nx.to_flat_list(x), fn i, v ->
+    %{sample: i, value: v, signal: "Input x[n]"}
+  end)
 
 filter_data =
-  Enum.zip(Enum.map(0..4, & &1), Nx.to_flat_list(h))
-  |> Enum.map(fn {i, v} -> %{sample: i, value: v, signal: "Filter h[n]"} end)
+  Enum.zip_with(Enum.to_list(0..4), Nx.to_flat_list(h), fn i, v ->
+    %{sample: i, value: v, signal: "Filter h[n]"}
+  end)
 
 output_data =
-  Enum.zip(samples_y, Nx.to_flat_list(y))
-  |> Enum.map(fn {i, v} -> %{sample: i, value: v, signal: "Output y[n] = x * h"} end)
+  Enum.zip_with(Enum.to_list(0..(Nx.size(y) - 1)), Nx.to_flat_list(y), fn i, v ->
+    %{sample: i, value: v, signal: "Output y[n] = x * h"}
+  end)
 
 all_data = impulse_data ++ filter_data ++ output_data
 
@@ -117,18 +117,13 @@ h_fir = NxSignal.Filters.firwin(51, [cutoff_norm])
 # Route A: direct time-domain convolution
 route_a = NxSignal.Convolution.convolve(signal, h_fir, mode: :same, method: :direct)
 
-# Route B: manual frequency-domain multiplication
-fft_len = n + Nx.size(h_fir) - 1
-# Next power of two for efficiency
-fft_len_padded = Integer.pow(2, ceil(:math.log2(fft_len)))
-
-x_fft = Nx.fft(Nx.as_type(signal, {:c, 64}), length: fft_len_padded)
-h_fft = Nx.fft(Nx.as_type(h_fir,  {:c, 64}), length: fft_len_padded)
-y_full = Nx.ifft(Nx.multiply(x_fft, h_fft))
-
-# Trim to :same length (centre of the full convolution)
-trim = div(Nx.size(h_fir), 2)
-route_b = Nx.real(y_full[trim..(trim + n - 1)])
+# Route B: FFT-based convolution
+# Under the hood NxSignal zero-pads both signals to the next power of two,
+# multiplies their FFTs, IFFTs the result, and trims to the requested length:
+#
+#   Y = IFFT(FFT(x, L) · FFT(h, L)),  L = next_pow2(N + M - 1)
+#
+route_b = NxSignal.Convolution.convolve(signal, h_fir, mode: :same, method: :fft)
 
 # Confirm both routes agree
 max_diff =
@@ -141,32 +136,36 @@ IO.inspect(Nx.to_number(max_diff), label: "max |Route A − Route B|")
 
 ```elixir
 # Visualise: input spectrum, filter response, and output spectrum side by side
-half = div(n, 2)
-freqs_hz = Nx.linspace(0, fs / 2.0, n: half, type: :f32) |> Nx.to_flat_list()
+# rfft returns div(n, 2) + 1 bins (DC through Nyquist inclusive)
+half = div(n, 2) + 1
+freqs_hz = Nx.linspace(0, fs / 2.0, n: half, endpoint: true, type: :f32) |> Nx.to_flat_list()
 
 to_amp_list = fn sig ->
   sig
-  |> Nx.as_type({:c, 64})
-  |> Nx.fft()
+  |> Nx.rfft()
   |> Nx.abs()
-  |> Nx.slice([0], [half])
   |> Nx.to_flat_list()
 end
 
-h_padded = Nx.pad(Nx.as_type(h_fir, {:c, 64}), Nx.as_type(0, {:c, 64}), [{0, n - Nx.size(h_fir), 0}])
-h_spectrum = h_padded |> Nx.fft() |> Nx.abs() |> Nx.slice([0], [half]) |> Nx.to_flat_list()
+h_padded = Nx.pad(h_fir, 0.0, [{0, n - Nx.size(h_fir), 0}])
+h_spectrum = h_padded |> Nx.rfft() |> Nx.abs() |> Nx.to_flat_list()
 
-spectrum_data =
-  Enum.zip(freqs_hz, to_amp_list.(signal))
-  |> Enum.map(fn {f, a} -> %{frequency: f, amplitude: a, panel: "Input |X(f)|"} end)
-  |> Kernel.++(
-    Enum.zip(freqs_hz, h_spectrum)
-    |> Enum.map(fn {f, a} -> %{frequency: f, amplitude: a, panel: "Filter |H(f)|"} end)
-  )
-  |> Kernel.++(
-    Enum.zip(freqs_hz, to_amp_list.(route_a))
-    |> Enum.map(fn {f, a} -> %{frequency: f, amplitude: a, panel: "Output |X(f)·H(f)|"} end)
-  )
+input_spec =
+  Enum.zip_with(freqs_hz, to_amp_list.(signal), fn f, a ->
+    %{frequency: f, amplitude: a, panel: "Input |X(f)|"}
+  end)
+
+filter_spec =
+  Enum.zip_with(freqs_hz, h_spectrum, fn f, a ->
+    %{frequency: f, amplitude: a, panel: "Filter |H(f)|"}
+  end)
+
+output_spec =
+  Enum.zip_with(freqs_hz, to_amp_list.(route_a), fn f, a ->
+    %{frequency: f, amplitude: a, panel: "Output |X(f)·H(f)|"}
+  end)
+
+spectrum_data = input_spec ++ filter_spec ++ output_spec
 
 Tucan.lineplot(spectrum_data, "frequency", "amplitude")
 |> Tucan.facet_by(:row, "panel")
@@ -282,10 +281,8 @@ dual_data =
   |> Enum.flat_map(fn {w, name} ->
     amps =
       Nx.multiply(x_win, w)
-      |> Nx.as_type({:c, 64})
-      |> Nx.fft()
+      |> Nx.rfft()
       |> Nx.abs()
-      |> Nx.slice([0], [half_win + 1])
     peak = Nx.reduce_max(amps)
     db =
       Nx.divide(amps, peak)
@@ -293,8 +290,7 @@ dual_data =
       |> Nx.multiply(20)
       |> Nx.max(-100.0)
       |> Nx.to_flat_list()
-    Enum.zip(freqs_win, db)
-    |> Enum.map(fn {f, d} -> %{frequency: f, amplitude_db: d, window: name} end)
+    Enum.zip_with(freqs_win, db, fn f, d -> %{frequency: f, amplitude_db: d, window: name} end)
   end)
 
 Tucan.lineplot(dual_data, "frequency", "amplitude_db")

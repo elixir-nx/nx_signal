@@ -38,9 +38,7 @@ annual_cycle  = Nx.multiply(0.04, Nx.sin(Nx.multiply(t, 2 * :math.pi() / 252.0))
 random_walk =
   noise
   |> Nx.multiply(0.01)
-  |> Nx.to_flat_list()
-  |> Enum.scan(0.0, &(&1 + &2))
-  |> Nx.tensor(type: :f32)
+  |> Nx.cumulative_sum(axis: 0)
 
 log_prices =
   Nx.add(Nx.multiply(t, trend_per_day), annual_cycle)
@@ -74,8 +72,7 @@ log_returns =
   Nx.log(closes[1..(n - 1)]) |> Nx.subtract(Nx.log(closes[0..(n - 2)]))
 
 price_data =
-  Enum.zip(dates, Nx.to_flat_list(closes))
-  |> Enum.map(fn {d, c} -> %{date: d, close: c} end)
+  Enum.zip_with(dates, Nx.to_flat_list(closes), fn d, c -> %{date: d, close: c} end)
 
 Tucan.lineplot(price_data, "date", "close")
 |> VegaLite.encode_field(:x, "date", type: :temporal, title: "Date")
@@ -86,8 +83,9 @@ Tucan.lineplot(price_data, "date", "close")
 
 ```elixir
 return_data =
-  Enum.zip(Enum.drop(dates, 1), Nx.to_flat_list(log_returns))
-  |> Enum.map(fn {d, r} -> %{date: d, return: r} end)
+  Enum.zip_with(Enum.drop(dates, 1), Nx.to_flat_list(log_returns), fn d, r ->
+    %{date: d, return: r}
+  end)
 
 Tucan.lineplot(return_data, "date", "return")
 |> VegaLite.encode_field(:x, "date", type: :temporal, title: "Date")
@@ -132,8 +130,7 @@ power_half  = power[1..(half - 1)]
   |> Enum.unzip()
 
 spectrum_data =
-  Enum.zip(periods_roi, powers_roi)
-  |> Enum.map(fn {p, pw} -> %{period: p, power: pw} end)
+  Enum.zip_with(periods_roi, powers_roi, fn p, pw -> %{period: p, power: pw} end)
 
 VegaLite.new(width: 680, height: 260, title: "Power Spectrum of S&P 500 Log Returns")
 |> VegaLite.data_from_values(spectrum_data)
@@ -185,10 +182,10 @@ trim_smooth = Nx.to_flat_list(smoothed[trim..(n - trim - 1)])
 
 # Combine raw and smoothed into a single long-form dataset
 chart_data_long =
-  Enum.zip([trim_dates, trim_close, trim_smooth])
-  |> Enum.flat_map(fn {d, raw, filt} ->
+  Enum.zip_with([trim_dates, trim_close, trim_smooth], fn [d, raw, filt] ->
     [%{date: d, close: raw, series: "Raw"}, %{date: d, close: filt, series: "FIR smoothed (63-day)"}]
   end)
+  |> List.flatten()
 
 Tucan.lineplot(chart_data_long, "date", "close")
 |> Tucan.color_by("series")
@@ -237,8 +234,7 @@ zoom_periods =
   end)
 
 zoom_data =
-  Enum.zip(zoom_periods, zoom_power)
-  |> Enum.map(fn {p, pw} -> %{period: p, power: pw} end)
+  Enum.zip_with(zoom_periods, zoom_power, fn p, pw -> %{period: p, power: pw} end)
 
 Tucan.lineplot(zoom_data, "period", "power", tooltip: true)
 |> VegaLite.encode_field(:x, "period",
