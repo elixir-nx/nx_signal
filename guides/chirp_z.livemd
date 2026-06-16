@@ -79,8 +79,9 @@ The signal itself, 50 ms of the two tones, shows their superposition clearly:
 n_show = trunc(fs * 0.05)
 
 time_data =
-  Enum.zip(Nx.to_flat_list(t[0..(n_show - 1)]), Nx.to_flat_list(x[0..(n_show - 1)]))
-  |> Enum.map(fn {ti, xi} -> %{time: ti, amplitude: xi} end)
+  Enum.zip_with(Nx.to_flat_list(t[0..(n_show - 1)]), Nx.to_flat_list(x[0..(n_show - 1)]), fn ti, xi ->
+    %{time: ti, amplitude: xi}
+  end)
 
 Tucan.lineplot(time_data, "time", "amplitude")
 |> Tucan.Axes.set_x_title("Time (s)")
@@ -162,10 +163,11 @@ zoom_result = NxSignal.zoom_fft(x2, f1_norm, f2_norm, m: m)
 zoom_amps   = Nx.abs(zoom_result)
 
 zoom_data =
-  Nx.linspace(45.0, 55.0, n: m, endpoint: false, type: {:f, 64})
-  |> Nx.to_flat_list()
-  |> Enum.zip(Nx.to_flat_list(zoom_amps))
-  |> Enum.map(fn {f, a} -> %{frequency: f, amplitude: a, method: "Zoom FFT (#{10.0 / m |> Float.round(3)} Hz bins)"} end)
+  Enum.zip_with(
+    Nx.linspace(45.0, 55.0, n: m, endpoint: false, type: {:f, 64}) |> Nx.to_flat_list(),
+    Nx.to_flat_list(zoom_amps),
+    fn f, a -> %{frequency: f, amplitude: a, method: "Zoom FFT (#{10.0 / m |> Float.round(3)} Hz bins)"} end
+  )
 
 comparison_data = dft_data ++ zoom_data
 
@@ -272,13 +274,17 @@ hz_outer = NxSignal.czt(h, m: m, a: a, w: w)
 
 angles = Nx.linspace(0, 360, n: m, endpoint: false, type: {:f, 64}) |> Nx.to_flat_list()
 
-contours_data =
-  Enum.zip(angles, Nx.to_flat_list(Nx.abs(hz_unit)))
-  |> Enum.map(fn {a, amp} -> %{angle: a, amplitude: amp, contour: "|z| = 1 (unit circle)"} end)
-  |> Kernel.++(
-    Enum.zip(angles, Nx.to_flat_list(Nx.abs(hz_outer)))
-    |> Enum.map(fn {a, amp} -> %{angle: a, amplitude: amp, contour: "|z| = 1.5"} end)
-  )
+unit_data =
+  Enum.zip_with(angles, Nx.to_flat_list(Nx.abs(hz_unit)), fn a, amp ->
+    %{angle: a, amplitude: amp, contour: "|z| = 1 (unit circle)"}
+  end)
+
+outer_data =
+  Enum.zip_with(angles, Nx.to_flat_list(Nx.abs(hz_outer)), fn a, amp ->
+    %{angle: a, amplitude: amp, contour: "|z| = 1.5"}
+  end)
+
+contours_data = unit_data ++ outer_data
 
 Tucan.lineplot(contours_data, "angle", "amplitude", tooltip: true)
 |> Tucan.color_by("contour")

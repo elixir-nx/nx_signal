@@ -752,11 +752,11 @@ defmodule NxSignal do
 
   ## Options
 
-    * `:m` - number of output points $M$. Defaults to `Nx.size(x)`.
-    * `:w` - contour ratio $W$ (complex scalar tensor).
+    * `:output_length` - number of output points $M$. Defaults to `Nx.size(x)`.
+    * `:contour_ratio` - contour ratio $W$ (complex scalar tensor).
       Defaults to $e^{-j2\pi/M}$, which gives the DFT.
-    * `:a` - contour starting point $A$ (complex scalar tensor).
-      Defaults to $1+0j$.
+    * `:contour_start` - contour starting point $A$ (complex scalar tensor).
+      Defaults to $1$.
 
   ## Examples
 
@@ -769,21 +769,21 @@ defmodule NxSignal do
   """
   @doc type: :transforms
   deftransform czt(x, opts \\ []) do
-    opts = Keyword.validate!(opts, [:m, :w, :a, axis: -1])
+    opts = Keyword.validate!(opts, [:output_length, :contour_ratio, :contour_start, axis: -1])
 
     ndim = Nx.rank(x)
     axis = opts[:axis]
     axis = if axis < 0, do: ndim + axis, else: axis
 
     n = elem(Nx.shape(x), axis)
-    m = opts[:m] || n
+    m = opts[:output_length] || n
     fft_len = czt_next_pow2(n + m - 1)
 
     w =
-      opts[:w] ||
+      opts[:contour_ratio] ||
         Nx.complex(:math.cos(-2 * :math.pi() / m), :math.sin(-2 * :math.pi() / m))
 
-    a = opts[:a] || Nx.complex(1.0, 0.0)
+    a = opts[:contour_start] || 1.0
 
     complex_type = x |> Nx.type() |> Nx.Type.to_complex()
     real_type = Nx.Type.to_real(complex_type)
@@ -809,8 +809,9 @@ defmodule NxSignal do
           real_type: real_type
         )
       else
-        batch_names = Enum.map(0..(length(other_axes) - 1), fn i -> :"batch_#{i}" end)
-        x_v = Nx.vectorize(x_t, batch_names)
+        batch_shape = x_t |> Nx.shape() |> Tuple.to_list() |> Enum.drop(-1)
+        batch_axes = Enum.with_index(batch_shape, fn size, i -> {:"batch_#{i}", size} end)
+        x_v = Nx.revectorize(x_t, x_t.vectorized_axes ++ batch_axes, target_shape: {n})
 
         result_v =
           czt_n(x_v, w, a,
@@ -827,9 +828,9 @@ defmodule NxSignal do
     Nx.transpose(result, axes: inv_perm)
   end
 
-  deftransformp czt_next_pow2(n) when n <= 1, do: 1
+  defp czt_next_pow2(n) when n <= 1, do: 1
 
-  deftransformp czt_next_pow2(n) do
+  defp czt_next_pow2(n) do
     Integer.pow(2, ceil(:math.log2(n)))
   end
 
@@ -850,7 +851,7 @@ defmodule NxSignal do
     k_idx = Nx.iota({m}, type: real_type)
 
     # Pre-multiply: yn[n] = x[n] · a^{-n} · w^{n²/2}
-    yn = x * Nx.pow(a, -n_idx) * Nx.exp(n_idx * n_idx / 2 * log_w)
+    yn = x * a ** -n_idx * Nx.exp(n_idx ** 2 / 2 * log_w)
 
     # Zero-pad yn to FFT length
     yn_padded = Nx.pad(yn, Nx.as_type(0, complex_type), [{0, fft_len - n, 0}])
@@ -870,7 +871,7 @@ defmodule NxSignal do
     g = Nx.ifft(Nx.fft(yn_padded) * Nx.fft(h_padded))
 
     # Post-multiply: X[k] = w^{k²/2} · g[k],  k = 0…M-1
-    Nx.slice(g, [0], [m]) * Nx.exp(k_idx * k_idx / 2 * log_w)
+    Nx.slice(g, [0], [m]) * Nx.exp(k_idx ** 2 / 2 * log_w)
   end
 
   @doc ~S"""
@@ -896,7 +897,7 @@ defmodule NxSignal do
 
   ## Options
 
-    * `:m` - number of output points $M$. Defaults to `Nx.size(x)`.
+    * `:output_length` - number of output points $M$. Defaults to `Nx.size(x)`.
 
   ## Examples
 
@@ -909,10 +910,10 @@ defmodule NxSignal do
   """
   @doc type: :transforms
   deftransform zoom_fft(x, f1, f2, opts \\ []) do
-    opts = Keyword.validate!(opts, [:m])
+    opts = Keyword.validate!(opts, [:output_length])
 
     {n} = Nx.shape(x)
-    m = opts[:m] || n
+    m = opts[:output_length] || n
 
     # A = e^{+j2πf1}: the CZT evaluates at A^{-n}, so the positive exponent here
     # places the first evaluation point at frequency f1.
@@ -924,6 +925,6 @@ defmodule NxSignal do
         :math.sin(-2 * :math.pi() * (f2 - f1) / m)
       )
 
-    czt(x, m: m, w: w, a: a)
+    czt(x, output_length: m, contour_ratio: w, contour_start: a)
   end
 end
