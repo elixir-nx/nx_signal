@@ -33,7 +33,7 @@ defmodule Audio do
       samples
       |> Nx.as_type(:f32)
       |> Nx.clip(-1.0, 1.0)
-      |> Nx.multiply(32_767)
+      |> Nx.multiply(22_000)
       |> Nx.as_type({:s, 16})
       |> Nx.to_binary()
 

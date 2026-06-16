@@ -32,7 +32,7 @@ remainder are padded with −1.
 defmodule Peaks do
   def indices(result) do
     n = Nx.to_number(result.valid_indices)
-    if n == 0, do: [], else: result.indices |> Nx.slice([0], [n]) |> Nx.to_flat_list()
+    if n == 0, do: [], else: result.indices |> Nx.slice([0, 0], [n, 1]) |> Nx.to_flat_list()
   end
 end
 ```
