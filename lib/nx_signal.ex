@@ -809,9 +809,10 @@ defmodule NxSignal do
           real_type: real_type
         )
       else
+        existing_vax = x_t.vectorized_axes
         batch_shape = x_t |> Nx.shape() |> Tuple.to_list() |> Enum.drop(-1)
-        batch_axes = Enum.with_index(batch_shape, fn size, i -> {:"batch_#{i}", size} end)
-        x_v = Nx.revectorize(x_t, x_t.vectorized_axes ++ batch_axes, target_shape: {n})
+
+        x_v = Nx.revectorize(x_t, [batch: :auto], target_shape: {n})
 
         result_v =
           czt_n(x_v, w, a,
@@ -822,7 +823,7 @@ defmodule NxSignal do
             real_type: real_type
           )
 
-        Nx.devectorize(result_v, keep_names: false)
+        Nx.revectorize(result_v, existing_vax, target_shape: List.to_tuple(batch_shape ++ [m]))
       end
 
     Nx.transpose(result, axes: inv_perm)
