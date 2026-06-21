@@ -760,10 +760,10 @@ defmodule NxSignal do
 
   ## Examples
 
-      iex> NxSignal.czt(Nx.tensor([1.0, 0.0, 0.0, 0.0])) |> Nx.real() |> Nx.round()
+      iex> NxSignal.czt(Nx.tensor([1.0, 0.0, 0.0, 0.0]))
       #Nx.Tensor<
-        f32[4]
-        [1.0, 1.0, 1.0, 1.0]
+        c64[4]
+        [1.0-1.5893256e-8i, 0.99999994+0.0i, 1.0+1.5893256e-8i, 0.99999994+0.0i]
       >
 
   """
