@@ -2,7 +2,7 @@
 
 ```elixir
 Mix.install([
-  {:nx_signal, "~> 0.2"},
+  {:nx_signal, "~> 0.3"},
   {:vega_lite, "~> 0.1"},
   {:kino_vega_lite, "~> 0.1"}
 ])
@@ -55,7 +55,7 @@ VegaLite.new(width: 600, height: 400, title: "Signal sample")
 fc = 600
 
 # Design the FIR filter coefficients using the window method
-h = NxSignal.Filters.firwin(window_length, fc, sampling_rate: fs, window: :hann)
+h = NxSignal.Filters.firwin(window_length, [fc], sampling_rate: fs, window: :hann)
 
 # Separate periodic Hann window for STFT analysis
 stft_window = NxSignal.Windows.hann(window_length)

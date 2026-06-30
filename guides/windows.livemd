@@ -1,0 +1,255 @@
+# Window Functions
+
+```elixir
+Mix.install([
+  {:nx_signal, path: __DIR__ |> Path.join("..") |> Path.expand()},
+  {:kino_vega_lite, "~> 0.1"},
+  {:tucan, "~> 0.5"}
+])
+```
+
+## Introduction
+
+When we compute a DFT we analyse only a finite slice of a signal. If the
+slice does not contain an exact integer number of cycles of a frequency
+component, that component appears to "jump" discontinuously at the edges of
+the window. The Fourier transform sees this as energy spread across many
+bins, not just the true one. This is **spectral leakage**.
+
+A **window function** tapers the signal smoothly to zero at both ends before
+the FFT, eliminating the discontinuity. The cost is a slightly wider main lobe
+around each true frequency; the benefit is dramatically lower sidelobe levels
+elsewhere. Every window represents a different point on this trade-off.
+
+Formally, multiplying the signal by a window $w[n]$ in the time domain is
+equivalent to convolving the spectrum with $W(f)$—the Fourier transform of
+the window—in the frequency domain. A narrow $W(f)$ preserves frequency
+resolution; low sidelobes on $W(f)$ suppress leakage.
+
+## The leakage problem in practice
+
+A tone at exactly a DFT bin frequency leaks nothing; one between bins leaks
+into every other bin. 10.5 Hz sits halfway between the 10 Hz and 11 Hz bins.
+
+```elixir
+fs       = 200
+n        = 200
+f_tone   = 10.5   # halfway between bins; worst case for leakage
+
+t = Nx.linspace(0, n / fs, n: n, endpoint: false, type: :f32)
+x = Nx.sin(Nx.multiply(t, 2 * :math.pi() * f_tone))
+
+# Rectangular window is just the raw signal (multiply by all-ones)
+rect_window = NxSignal.Windows.rectangular(n, type: :f32)
+hann_window = NxSignal.Windows.hann(n, is_periodic: false)
+
+half = div(n, 2)
+freqs = NxSignal.fft_frequencies(fs, fft_length: n)[0..half] |> Nx.to_flat_list()
+
+to_db = fn window, name ->
+  amps =
+    Nx.multiply(x, window)
+    |> Nx.as_type({:c, 64})
+    |> Nx.fft()
+    |> Nx.abs()
+    |> Nx.slice([0], [half + 1])
+
+  peak = Nx.reduce_max(amps)
+  amps_norm = Nx.divide(amps, peak)
+
+  # Floor at -120 dB to avoid -inf for zero bins
+  db =
+    amps_norm
+    |> Nx.log10()
+    |> Nx.multiply(20)
+    |> Nx.max(-120.0)
+    |> Nx.to_flat_list()
+
+  Enum.zip(freqs, db)
+  |> Enum.map(fn {f, d} -> %{frequency: f, amplitude_db: d, window: name} end)
+end
+
+leakage_data =
+  to_db.(rect_window, "Rectangular") ++
+  to_db.(hann_window, "Hann")
+
+Tucan.lineplot(leakage_data, "frequency", "amplitude_db")
+|> Tucan.color_by("window")
+|> Tucan.Axes.set_x_title("Frequency (Hz)")
+|> Tucan.Axes.set_y_title("Amplitude (dB)")
+|> Tucan.set_title("Spectral leakage: 10.5 Hz tone, rectangular vs Hann window")
+|> Tucan.set_width(680)
+|> Tucan.set_height(280)
+```
+
+The rectangular window leaks energy across the entire spectrum. The Hann
+window concentrates it near 10.5 Hz, with the remainder buried in the noise
+floor.
+
+## Window shapes
+
+NxSignal provides seven windows. Here is how they look in the time domain:
+
+```elixir
+n_shape = 64
+
+windows_list = [
+  {"Rectangular", NxSignal.Windows.rectangular(n_shape, type: :f32)},
+  {"Bartlett",    NxSignal.Windows.bartlett(n_shape)},
+  {"Triangular",  NxSignal.Windows.triangular(n_shape)},
+  {"Hann",        NxSignal.Windows.hann(n_shape, is_periodic: false)},
+  {"Hamming",     NxSignal.Windows.hamming(n_shape, is_periodic: false)},
+  {"Blackman",    NxSignal.Windows.blackman(n_shape, is_periodic: false)},
+  {"Kaiser β=14", NxSignal.Windows.kaiser(n_shape, beta: 14)}
+]
+
+samples = Nx.iota({n_shape}, type: :f32) |> Nx.to_flat_list()
+
+shape_data =
+  Enum.flat_map(windows_list, fn {name, w} ->
+    Enum.zip(samples, Nx.to_flat_list(w))
+    |> Enum.map(fn {i, v} -> %{sample: i, amplitude: v, window: name} end)
+  end)
+
+Tucan.lineplot(shape_data, "sample", "amplitude")
+|> Tucan.color_by("window")
+|> Tucan.Axes.set_x_title("Sample")
+|> Tucan.Axes.set_y_title("Amplitude")
+|> Tucan.set_title("Window functions in the time domain (N = 64)")
+|> Tucan.set_width(680)
+|> Tucan.set_height(260)
+```
+
+## Frequency responses: the sidelobe comparison
+
+This is the chart that matters most for choosing a window. Zero-padding to
+1024 points interpolates the frequency axis so the sidelobe structure is
+clearly visible.
+
+```elixir
+pad_to = 1024
+
+freq_resp_data =
+  Enum.flat_map(windows_list, fn {name, w} ->
+    padded = Nx.pad(Nx.as_type(w, {:c, 64}), Nx.as_type(0, {:c, 64}), [{0, pad_to - n_shape, 0}])
+
+    amps = Nx.fft(padded) |> Nx.abs() |> Nx.slice([0], [div(pad_to, 2)])
+    peak = Nx.reduce_max(amps)
+
+    db =
+      Nx.divide(amps, peak)
+      |> Nx.log10()
+      |> Nx.multiply(20)
+      |> Nx.max(-120.0)
+      |> Nx.to_flat_list()
+
+    # Normalised frequency 0..0.5
+    bins = Enum.map(0..(div(pad_to, 2) - 1), fn k -> k / pad_to end)
+
+    Enum.zip(bins, db)
+    |> Enum.map(fn {f, d} -> %{norm_freq: f, amplitude_db: d, window: name} end)
+  end)
+
+Tucan.lineplot(freq_resp_data, "norm_freq", "amplitude_db")
+|> Tucan.color_by("window")
+|> VegaLite.encode_field(:y, "amplitude_db",
+    type: :quantitative,
+    title: "Amplitude (dB)",
+    scale: [domain: [-120, 5]]
+  )
+|> Tucan.Axes.set_x_title("Normalised frequency (cycles/sample)")
+|> Tucan.set_title("Window frequency responses: sidelobe levels (N = 64, zero-padded to 1024)")
+|> Tucan.set_width(680)
+|> Tucan.set_height(300)
+```
+
+The trade-off is plain: the rectangular window has the narrowest main lobe
+but the highest sidelobes (−13 dB). Blackman and Kaiser push sidelobes below
+−60 dB at the cost of a wider main lobe.
+
+## Key parameters
+
+| Window         | Peak sidelobe | Typical use                                   |
+| -------------- | ------------- | --------------------------------------------- |
+| Rectangular    | −13 dB      | Transients; when leakage is not a concern     |
+| Bartlett       | −25 dB      | General purpose; linear taper                 |
+| Triangular     | −27 dB      | Similar to Bartlett                           |
+| Hann           | −31 dB      | **Default choice** for spectrum analysis      |
+| Hamming        | −41 dB      | FIR filter design (non-zero endpoints)        |
+| Blackman       | −57 dB      | High dynamic range measurements               |
+| Kaiser (β=14) | −60 dB+     | Configurable; use when requirements are known |
+
+## The Kaiser β parameter
+
+Kaiser is unique in that a single parameter $\beta$ continuously controls the
+sidelobe level vs main-lobe width trade-off. As $\beta \to 0$ the window
+approaches rectangular; $\beta = 1$ is already nearly flat across most of the
+window.
+
+```elixir
+kaiser_data =
+  [{"β = 1",  NxSignal.Windows.kaiser(n_shape, beta: 1)},
+   {"β = 5",  NxSignal.Windows.kaiser(n_shape, beta: 5)},
+   {"β = 10", NxSignal.Windows.kaiser(n_shape, beta: 10)},
+   {"β = 14", NxSignal.Windows.kaiser(n_shape, beta: 14)}]
+  |> Enum.flat_map(fn {name, w} ->
+    padded = Nx.pad(Nx.as_type(w, {:c, 64}), Nx.as_type(0, {:c, 64}), [{0, pad_to - n_shape, 0}])
+    amps = Nx.fft(padded) |> Nx.abs() |> Nx.slice([0], [div(pad_to, 2)])
+    peak = Nx.reduce_max(amps)
+    db =
+      Nx.divide(amps, peak)
+      |> Nx.log10()
+      |> Nx.multiply(20)
+      |> Nx.max(-120.0)
+      |> Nx.to_flat_list()
+    bins = Enum.map(0..(div(pad_to, 2) - 1), fn k -> k / pad_to end)
+    Enum.zip(bins, db)
+    |> Enum.map(fn {f, d} -> %{norm_freq: f, amplitude_db: d, window: name} end)
+  end)
+
+Tucan.lineplot(kaiser_data, "norm_freq", "amplitude_db")
+|> Tucan.color_by("window")
+|> VegaLite.encode_field(:y, "amplitude_db",
+    type: :quantitative,
+    title: "Amplitude (dB)",
+    scale: [domain: [-120, 5]]
+  )
+|> Tucan.Axes.set_x_title("Normalised frequency (cycles/sample)")
+|> Tucan.set_title("Kaiser window: effect of β on sidelobe level (N = 64)")
+|> Tucan.set_width(680)
+|> Tucan.set_height(280)
+```
+
+Larger $\beta$ widens the main lobe but drives sidelobes lower. For
+`NxSignal.Filters.firwin`, the `:kaiser` window is available via the
+`window:` option and its $\beta$ is derived automatically from the stopband
+attenuation specification.
+
+## Choosing a window
+
+**If in doubt, use Hann.** It is the best all-round choice for general
+spectrum analysis: moderate main-lobe width and sidelobes low enough for most
+practical SNR ranges.
+
+Use **Hamming** when designing FIR filters because its non-zero endpoints give
+slightly better passband ripple.
+
+Use **Blackman** or **Kaiser** when you need to measure a weak component
+sitting close to a strong one. The −57 dB / −60 dB sidelobe floor allows you
+to see signals 600× weaker than a nearby dominant tone.
+
+Use **Rectangular** for transient or impulse signals where the signal is
+already zero at the edges, or for coherent averaging where you know the signal
+is periodic with exactly $N$ samples.
+
+## Connection to filtering
+
+Windowing is multiplication in the time domain. By the convolution theorem,
+multiplication in time equals convolution in frequency: applying window
+$w[n]$ to a signal smears each spectral line by convolving it with $W(f)$.
+
+A rectangular window has a $\text{sinc}$-shaped $W(f)$ with slow-decaying
+sidelobes. Smooth windows have more concentrated $W(f)$, so nearby spectral
+lines stay separated. This is also why `NxSignal.Filters.firwin` is named for
+the **win**dow method: it multiplies the ideal (sinc-shaped) impulse response
+by a window to control the filter's transition band and stopband behaviour.

@@ -1,0 +1,316 @@
+# The Convolution Theorem
+
+```elixir
+Mix.install([
+  {:nx_signal, path: __DIR__ |> Path.join("..") |> Path.expand()},
+  {:kino_vega_lite, "~> 0.1"},
+  {:tucan, "~> 0.5"}
+])
+```
+
+## The most important theorem in DSP
+
+Convolution in the time domain is equivalent to pointwise multiplication in
+the frequency domain, and vice versa:
+
+$$
+x[n] * h[n] \;\longleftrightarrow\; X(f) \cdot H(f)
+$$
+
+$$
+x[n] \cdot h[n] \;\longleftrightarrow\; X(f) * H(f)
+$$
+
+This single fact underpins almost everything in signal processing:
+
+* **Filtering**: applying a filter $h$ to signal $x$ is just multiplication
+  in the frequency domain, then transform back.
+* **Fast convolution**: direct convolution costs $O(N^2)$; via FFT it costs
+  $O(N \log N)$.
+* **Spectral leakage**: multiplying by a window in time convolves your
+  spectrum with the window's own Fourier transform (the dual).
+
+## What is convolution?
+
+The cleanest way to understand convolution is through the **impulse response**:
+a linear time-invariant (LTI) system is completely described by what it does to
+a unit impulse $\delta[n]$. Call that response $h[n]$. For any input $x[n]$,
+the output is:
+
+$$
+y[n] = \sum_{k} x[k] \, h[n - k] = (x * h)[n]
+$$
+
+Every sample of $x$ contributes a scaled, delayed copy of $h$; the output is
+their sum.
+
+```elixir
+# A simple 5-tap box (moving average) filter
+h = Nx.broadcast(1.0 / 5, {5}) |> Nx.as_type(:f32)
+
+# An input with impulses at positions 3, 10, and 16 (amplitudes 1, 0.75, 0.5)
+x =
+  Nx.broadcast(0.0, {30})
+  |> Nx.indexed_put(Nx.tensor([[3], [10], [16]]), Nx.tensor([1.0, 0.75, 0.5]))
+
+y = NxSignal.Convolution.convolve(x, h, mode: :full)
+
+impulse_data =
+  Enum.zip_with(Enum.to_list(0..29), Nx.to_flat_list(x), fn i, v ->
+    %{sample: i, value: v, signal: "Input x[n]"}
+  end)
+
+filter_data =
+  Enum.zip_with(Enum.to_list(0..4), Nx.to_flat_list(h), fn i, v ->
+    %{sample: i, value: v, signal: "Filter h[n]"}
+  end)
+
+output_data =
+  Enum.zip_with(Enum.to_list(0..(Nx.size(y) - 1)), Nx.to_flat_list(y), fn i, v ->
+    %{sample: i, value: v, signal: "Output y[n] = x * h"}
+  end)
+
+all_data = impulse_data ++ filter_data ++ output_data
+
+Tucan.lineplot(all_data, "sample", "value")
+|> Tucan.color_by("signal")
+|> Tucan.facet_by(:row, "signal")
+|> Tucan.Axes.set_x_title("Sample")
+|> Tucan.Axes.set_y_title("Amplitude")
+|> Tucan.set_title("Convolution as scaled, delayed copies of the impulse response")
+|> Tucan.set_width(640)
+|> Tucan.set_height(80)
+```
+
+Each impulse in $x$ produces a copy of $h$ at that position, scaled by the
+impulse's amplitude. The output $y$ is their superposition.
+
+## The theorem in action
+
+The theorem states that two routes exist to compute $y = x * h$:
+
+**Route A - time domain:** direct convolution (flip-and-slide).
+
+**Route B - frequency domain:** $Y = \text{IFFT}(X \cdot H)$.
+
+Both must give the same answer. Let's verify with a real filter.
+
+```elixir
+fs  = 8_000
+dur = 0.5
+n   = trunc(fs * dur)
+t   = Nx.linspace(0, dur, n: n, endpoint: false, type: :f32)
+
+# Signal: 440 Hz tone + 1 800 Hz tone + Gaussian noise
+key = Nx.Random.key(42)
+{noise, _key} = Nx.Random.normal(key, shape: {n}, type: :f32)
+
+signal =
+  Nx.sin(Nx.multiply(t, 2 * :math.pi() * 440))
+  |> Nx.add(Nx.multiply(0.6, Nx.sin(Nx.multiply(t, 2 * :math.pi() * 1800))))
+  |> Nx.add(Nx.multiply(0.2, noise))
+
+# 51-tap low-pass FIR filter, cutoff at 1 000 Hz
+cutoff_norm = 1000.0 / (fs / 2.0)
+h_fir = NxSignal.Filters.firwin(51, [cutoff_norm])
+
+# Route A: direct time-domain convolution
+route_a = NxSignal.Convolution.convolve(signal, h_fir, mode: :same, method: :direct)
+
+# Route B: FFT-based convolution
+# Under the hood NxSignal zero-pads both signals to the next power of two,
+# multiplies their FFTs, IFFTs the result, and trims to the requested length:
+#
+#   Y = IFFT(FFT(x, L) · FFT(h, L)),  L = next_pow2(N + M - 1)
+#
+route_b = NxSignal.Convolution.convolve(signal, h_fir, mode: :same, method: :fft)
+
+# Confirm both routes agree
+max_diff =
+  Nx.subtract(route_a, route_b)
+  |> Nx.abs()
+  |> Nx.reduce_max()
+
+IO.inspect(Nx.to_number(max_diff), label: "max |Route A − Route B|")
+```
+
+```elixir
+# Visualise: input spectrum, filter response, and output spectrum side by side
+# rfft returns div(n, 2) + 1 bins (DC through Nyquist inclusive)
+half = div(n, 2) + 1
+freqs_hz = Nx.linspace(0, fs / 2.0, n: half, endpoint: true, type: :f32) |> Nx.to_flat_list()
+
+to_amp_list = fn sig ->
+  sig
+  |> Nx.rfft()
+  |> Nx.abs()
+  |> Nx.to_flat_list()
+end
+
+h_padded = Nx.pad(h_fir, 0.0, [{0, n - Nx.size(h_fir), 0}])
+h_spectrum = h_padded |> Nx.rfft() |> Nx.abs() |> Nx.to_flat_list()
+
+input_spec =
+  Enum.zip_with(freqs_hz, to_amp_list.(signal), fn f, a ->
+    %{frequency: f, amplitude: a, panel: "Input |X(f)|"}
+  end)
+
+filter_spec =
+  Enum.zip_with(freqs_hz, h_spectrum, fn f, a ->
+    %{frequency: f, amplitude: a, panel: "Filter |H(f)|"}
+  end)
+
+output_spec =
+  Enum.zip_with(freqs_hz, to_amp_list.(route_a), fn f, a ->
+    %{frequency: f, amplitude: a, panel: "Output |X(f)·H(f)|"}
+  end)
+
+spectrum_data = input_spec ++ filter_spec ++ output_spec
+
+Tucan.lineplot(spectrum_data, "frequency", "amplitude")
+|> Tucan.facet_by(:row, "panel")
+|> Tucan.Axes.set_x_title("Frequency (Hz)")
+|> Tucan.Axes.set_y_title("Amplitude")
+|> Tucan.set_title("The convolution theorem: three views of filtering")
+|> Tucan.set_width(640)
+|> Tucan.set_height(100)
+```
+
+The 1 800 Hz component visible in the input spectrum is absent from the
+output. This is because the filter zeroed it in the frequency domain.
+
+## Cross-correlation and delay estimation
+
+Cross-correlation is like convolution but without the time-reversal of $h$:
+
+$$
+(x \star h)[n] = \sum_k x[k] \, h[k - n]
+$$
+
+It measures how similar $x$ and $h$ are as a function of **lag** $n$. The
+peak of the cross-correlation identifies the delay between two signals. This
+technique is used in sonar, seismology, and audio alignment.
+
+```elixir
+fs_corr    = 8_000
+burst_len  = trunc(0.04 * fs_corr)   # 40 ms reference burst
+total_len  = trunc(0.4  * fs_corr)   # 400 ms total window
+true_delay = 80                        # samples ≈ 10 ms
+
+t_burst = Nx.linspace(0, burst_len / fs_corr, n: burst_len, endpoint: false, type: :f32)
+reference = Nx.sin(Nx.multiply(t_burst, 2 * :math.pi() * 600))
+
+# Received signal: noise + attenuated, delayed copy of the reference
+key2 = Nx.Random.key(7)
+{noise2, _} = Nx.Random.normal(key2, shape: {total_len}, type: :f32)
+noise2 = Nx.multiply(noise2, 0.4)
+
+rx =
+  Nx.pad(reference, 0.0, [{true_delay, total_len - burst_len - true_delay, 0}])
+  |> Nx.multiply(0.7)
+  |> Nx.add(noise2)
+
+# Cross-correlate received signal with reference
+corr = NxSignal.Convolution.correlate(rx, reference, mode: :full)
+corr_amps = Nx.abs(corr)
+
+# Lag axis: negative lags first, zero at index burst_len - 1
+n_corr  = Nx.size(corr_amps)
+lags    = Enum.map(0..(n_corr - 1), fn i -> i - (burst_len - 1) end)
+
+{_val, peak_idx} = Nx.top_k(corr_amps, k: 1)
+detected_delay = Nx.to_number(peak_idx[0]) - (burst_len - 1)
+
+IO.puts("True delay:     #{true_delay} samples")
+IO.puts("Detected delay: #{detected_delay} samples")
+```
+
+```elixir
+corr_data =
+  Enum.zip(lags, Nx.to_flat_list(corr_amps))
+  |> Enum.filter(fn {lag, _} -> lag >= -20 and lag <= 200 end)
+  |> Enum.map(fn {lag, a} -> %{lag: lag, correlation: a} end)
+
+peak_data = [%{lag: detected_delay, correlation: Nx.to_number(corr_amps[detected_delay + burst_len - 1])}]
+
+VegaLite.new(width: 680, height: 220, title: "Cross-correlation: peak at delay = #{detected_delay} samples")
+|> VegaLite.layers([
+  VegaLite.new()
+  |> VegaLite.data_from_values(corr_data)
+  |> VegaLite.mark(:line, color: "steelblue")
+  |> VegaLite.encode_field(:x, "lag", type: :quantitative, title: "Lag (samples)")
+  |> VegaLite.encode_field(:y, "correlation", type: :quantitative, title: "|Correlation|"),
+  VegaLite.new()
+  |> VegaLite.data_from_values(peak_data)
+  |> VegaLite.mark(:point, color: "tomato", size: 120, filled: true)
+  |> VegaLite.encode_field(:x, "lag", type: :quantitative)
+  |> VegaLite.encode_field(:y, "correlation", type: :quantitative)
+])
+```
+
+The correlation peak (red dot) is at exactly the true delay, even though the
+echo is buried in noise and invisible to the eye in the raw received signal.
+
+## Windowing and spectral leakage
+
+The second form of the theorem states that **multiplication in time equals
+convolution in frequency**. This is why window functions matter.
+
+When we multiply a signal by a rectangular window (i.e. we simply observe
+$N$ samples and discard the rest), we convolve its spectrum with a $\text{sinc}$
+function, spreading energy from each spectral line into neighbouring bins.
+A smooth window has a more compact Fourier transform, so the spectral smearing
+is less severe.
+
+```elixir
+fs_win  = 200
+n_win   = 200
+f_tone2 = 10.5
+
+t_win = Nx.linspace(0, n_win / fs_win, n: n_win, endpoint: false, type: :f32)
+x_win = Nx.sin(Nx.multiply(t_win, 2 * :math.pi() * f_tone2))
+
+rect_w = NxSignal.Windows.rectangular(n_win, type: :f32)
+hann_w = NxSignal.Windows.hann(n_win, is_periodic: false)
+
+half_win = div(n_win, 2)
+freqs_win = NxSignal.fft_frequencies(fs_win, fft_length: n_win)[0..half_win] |> Nx.to_flat_list()
+
+dual_data =
+  [{rect_w, "Rectangular (multiply by 1)"}, {hann_w, "Hann (smooth taper)"}]
+  |> Enum.flat_map(fn {w, name} ->
+    amps =
+      Nx.multiply(x_win, w)
+      |> Nx.rfft()
+      |> Nx.abs()
+    peak = Nx.reduce_max(amps)
+    db =
+      Nx.divide(amps, peak)
+      |> Nx.log10()
+      |> Nx.multiply(20)
+      |> Nx.max(-100.0)
+      |> Nx.to_flat_list()
+    Enum.zip_with(freqs_win, db, fn f, d -> %{frequency: f, amplitude_db: d, window: name} end)
+  end)
+
+Tucan.lineplot(dual_data, "frequency", "amplitude_db")
+|> Tucan.color_by("window")
+|> VegaLite.encode_field(:y, "amplitude_db", type: :quantitative, title: "Amplitude (dB)", scale: [domain: [-100, 5]])
+|> Tucan.Axes.set_x_title("Frequency (Hz)")
+|> Tucan.set_title("Dual theorem: multiplication in time = convolution in frequency (spectral leakage)")
+|> Tucan.set_width(680)
+|> Tucan.set_height(260)
+```
+
+## Summary
+
+| Function                                      | Method         | When to use                         |
+| --------------------------------------------- | -------------- | ----------------------------------- |
+| `Convolution.convolve(x, h, method: :direct)` | $O(N \cdot M)$ | Short kernels ($M \lesssim 50$)     |
+| `Convolution.convolve(x, h, method: :fft)`    | $O(N \log N)$  | Long kernels or large signals       |
+| `Convolution.fftconvolve(x, h)`               | $O(N \log N)$  | Convenience alias for FFT method    |
+| `Convolution.correlate(x, h)`                 | Direct or FFT  | Delay estimation, matched filtering |
+
+The convolution theorem is the reason `method: :fft` exists: instead of
+$O(N \cdot M)$ multiply-accumulates, you pay three FFTs at $O(N \log N)$ each.
+For any kernel longer than roughly 50 taps the FFT method wins.

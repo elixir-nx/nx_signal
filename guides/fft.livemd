@@ -2,7 +2,7 @@
 
 ```elixir
 Mix.install([
-  {:nx_signal, "~> 0.2"},
+  {:nx_signal, "~> 0.3"},
   {:vega_lite, "~> 0.1"},
   {:kino_vega_lite, "~> 0.1"}
 ])
@@ -120,7 +120,7 @@ We can confirm this visual inspection with a peek into our data. We use `Nx.top_
 {values, indices} = Nx.top_k(amplitudes, k: 5)
 
 {
-  values, 
+  values,
   frequencies[indices]
 }
 ```
