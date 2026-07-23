@@ -213,7 +213,7 @@ defmodule NxSignal.Windows do
       iex> NxSignal.Windows.hamming(5, is_periodic: true)
       #Nx.Tensor<
         f32[5]
-        [0.08000001, 0.3978522, 0.9121479, 0.9121478, 0.39785212]
+        [0.08000001, 0.3978522, 0.9121479, 0.9121479, 0.3978522]
       >
       iex> NxSignal.Windows.hamming(5, is_periodic: false)
       #Nx.Tensor<
@@ -240,12 +240,20 @@ defmodule NxSignal.Windows do
         n
       end
 
-    n = Nx.iota({l}, names: [name], type: type)
+    m = integer_div_ceil(l, 2)
+    idx = Nx.iota({m}, names: [name], type: type)
 
-    window = 0.54 - 0.46 * Nx.cos(2 * @pi * n / (l - 1))
+    left = 0.54 - 0.46 * Nx.cos(2 * @pi * idx / (l - 1))
+
+    window =
+      if rem(l, 2) == 0 do
+        Nx.concatenate([left, Nx.reverse(left)])
+      else
+        Nx.concatenate([left, left |> Nx.reverse() |> Nx.slice([1], [m - 1])])
+      end
 
     if is_periodic do
-      Nx.slice(window, [0], [l - 1])
+      Nx.slice(window, [0], [n])
     else
       window
     end
@@ -271,7 +279,7 @@ defmodule NxSignal.Windows do
       iex> NxSignal.Windows.hann(5, is_periodic: true)
       #Nx.Tensor<
         f32[5]
-        [0.0, 0.34549153, 0.90450853, 0.9045085, 0.34549144]
+        [0.0, 0.34549153, 0.90450853, 0.90450853, 0.34549153]
       >
   """
   @doc type: :windowing
@@ -293,12 +301,20 @@ defmodule NxSignal.Windows do
         n
       end
 
-    n = Nx.iota({l}, names: [name], type: type)
+    m = integer_div_ceil(l, 2)
+    idx = Nx.iota({m}, names: [name], type: type)
 
-    window = 0.5 * (1 - Nx.cos(2 * @pi * n / (l - 1)))
+    left = 0.5 * (1 - Nx.cos(2 * @pi * idx / (l - 1)))
+
+    window =
+      if rem(l, 2) == 0 do
+        Nx.concatenate([left, Nx.reverse(left)])
+      else
+        Nx.concatenate([left, left |> Nx.reverse() |> Nx.slice([1], [m - 1])])
+      end
 
     if is_periodic do
-      Nx.slice(window, [0], [l - 1])
+      Nx.slice(window, [0], [n])
     else
       window
     end
@@ -334,7 +350,7 @@ defmodule NxSignal.Windows do
       iex> NxSignal.Windows.kaiser(4, beta: 12.0, is_periodic: false)
       #Nx.Tensor<
         f32[4]
-        [5.277619e-5, 0.5188395, 0.51883906, 5.277619e-5]
+        [5.277619e-5, 0.5188395, 0.5188395, 5.277619e-5]
       >
   """
   @doc type: :windowing
@@ -353,13 +369,22 @@ defmodule NxSignal.Windows do
     eps = opts[:eps]
     is_periodic = opts[:is_periodic]
 
-    window_length = if is_periodic, do: n + 1, else: n
+    l = if is_periodic, do: n + 1, else: n
+    m = integer_div_ceil(l, 2)
+    idx = Nx.iota({m}, names: [name], type: type)
 
-    ratio = Nx.linspace(-1, 1, n: window_length, endpoint: true, type: type, name: name)
+    ratio = idx * 2.0 / (l - 1) - 1.0
     sqrt_arg = Nx.max(1 - ratio ** 2, eps)
     r = beta * Nx.sqrt(sqrt_arg)
 
-    window = kaiser_bessel_i0(r) / kaiser_bessel_i0(beta)
+    left = kaiser_bessel_i0(r) / kaiser_bessel_i0(beta)
+
+    window =
+      if rem(l, 2) == 0 do
+        Nx.concatenate([left, Nx.reverse(left)])
+      else
+        Nx.concatenate([left, left |> Nx.reverse() |> Nx.slice([1], [m - 1])])
+      end
 
     if is_periodic do
       Nx.slice(window, [0], [n])
