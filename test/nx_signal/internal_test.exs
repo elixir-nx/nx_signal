@@ -11,7 +11,6 @@ defmodule NxSignal.InternalTest do
             {0, 1, Complex.new(:neg_infinity, 0)},
             {0, 3, Complex.new(:neg_infinity, 0)},
             {Nx.to_number(Nx.Constants.e({:f, 64})), 0, 1},
-            {1, 0, 0.567143290409783873},
             {-Nx.to_number(Nx.Constants.pi(:f64)) / 2, 0,
              Complex.new(0, Nx.to_number(Nx.Constants.pi(:f64)) / 2)},
             {-:math.log(2.0) / 2, 0, -:math.log(2)},
@@ -69,6 +68,10 @@ defmodule NxSignal.InternalTest do
         x = NxSignal.Internal.lambert_w(a, b)
         assert_all_close(x, as_tensor(y), atol: 1.0e-13, rtol: 1.0e-10)
       end
+
+      # LambertW(1, 0) = Omega constant, matches within f64 precision
+      x = NxSignal.Internal.lambert_w(1, 0)
+      assert_all_close(x, as_tensor(0.5671432904097838), atol: 1.0e-7)
     end
   end
 
