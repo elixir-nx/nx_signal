@@ -2,7 +2,7 @@ defmodule NxSignal.MixProject do
   use Mix.Project
 
   @source_url "https://github.com/elixir-nx/nx_signal"
-  @version "0.3.0"
+  @version "0.4.0"
 
   def project do
     [
@@ -16,11 +16,11 @@ defmodule NxSignal.MixProject do
       name: "NxSignal",
       description: "Digital Signal Processing extension for Nx",
       package: package(),
-      preferred_cli_env: [
-        docs: :docs,
-        "hex.publish": :docs
-      ]
     ]
+  end
+
+  def cli do
+    [preferred_envs: [docs: :docs, "hex.publish": :docs]]
   end
 
   defp elixirc_paths(:test), do: ["test/support", "lib"]
@@ -57,7 +57,7 @@ defmodule NxSignal.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:nx, "~> 0.11"},
+      {:nx, "~> 1.0"},
       {:ex_doc, "~> 0.29", only: :docs}
     ]
   end

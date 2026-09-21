@@ -346,7 +346,7 @@ defmodule NxSignal do
       as_windowed_parse_reflect_opts(Nx.shape(tensor), opts)
 
     half_window = div(window_length, 2)
-    tensor = Nx.reflect(tensor, padding_config: [{half_window, half_window}])
+    tensor = Nx.pad_outer(tensor, :reflect, [{half_window, half_window}])
 
     as_windowed_apply(tensor, stride, output_shape, window_length)
   end
